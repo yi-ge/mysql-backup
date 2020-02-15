@@ -1,0 +1,110 @@
+{
+  "name": "mysql-backup",
+  "version": "2.0.0",
+  "description": "Automatically get your mysql database backup and uploading it to the Object Storage.",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "nodemon src/main.js",
+    "start": "node src/main.js",
+    "lint": "standard src/**/*.js",
+    "lint:fix": "standard --fix src/**/*.js",
+    "test": "node test/upload.test.js",
+    "test:jest": "echo 'https://github.com/facebook/jest/issues/9430' && echo 'jest --no-cache upload.test.js'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yi-ge/mysql-backup.git"
+  },
+  "keywords": [
+    "MySQL",
+    "Backup"
+  ],
+  "author": "yi-ge <a@wyr.me>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yi-ge/mysql-backup/issues"
+  },
+  "homepage": "https://github.com/yi-ge/mysql-backup#readme",
+  "type": "module",
+  "dependencies": {
+    "ali-oss": "^6.5.1",
+    "archiver": "^3.1.1",
+    "archiver-zip-encrypted": "^1.0.8",
+    "cos-nodejs-sdk-v5": "^2.5.14",
+    "dayjs": "^1.8.19",
+    "fastify": "^2.11.0",
+    "fastify-cors": "^3.0.1",
+    "fastify-jwt": "^1.2.1",
+    "fastify-plugin": "^1.6.0",
+    "fastify-static": "^2.6.0",
+    "fastify-swagger": "^2.5.0",
+    "jssha": "^2.3.1",
+    "lowdb": "^1.0.0",
+    "mysql2": "^2.1.0",
+    "mysqldump": "^3.1.0",
+    "node-schedule": "^1.3.2",
+    "pino-pretty": "^3.5.0",
+    "qiniu": "https://github.com/yi-ge/nodejs-sdk",
+    "request": "^2.88.2",
+    "uuid": "^3.4.0"
+  },
+  "devDependencies": {
+    "babel-eslint": "^10.0.3",
+    "jest": "^25.1.0",
+    "nodemon": "^2.0.2",
+    "standard": "^14.3.1"
+  },
+  "standard": {
+    "parser": "babel-eslint",
+    "globals": [
+      "$",
+      "monaco"
+    ],
+    "env": {
+      "browser": true,
+      "node": true
+    },
+    "parserOptions": {
+      "ecmaVersion": 9,
+      "sourceType": "module"
+    },
+    "ignore": [
+      "src/ui/",
+      "src/template"
+    ]
+  },
+  "nodemonConfig": {
+    "ignore": [
+      ".git",
+      "node_modules/**/node_modules"
+    ],
+    "delay": "2500",
+    "env": {
+      "NODE_ENV": "development"
+    },
+    "verbose": true,
+    "execMap": {
+      "js": "node --harmony"
+    },
+    "watch": [
+      "src/"
+    ],
+    "ext": "js,json"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!.*?/es/.*\\.js)"
+    ],
+    "transform": {},
+    "rootDir": "test",
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node"
+  },
+  "engines": {
+    "node": ">= 13.7.0"
+  }
+}

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+  <link rel="stylesheet" href="css/font-awesome.min.css">
+  <link rel="stylesheet" href="css/toast.min.css">
+  <link rel="stylesheet" href="css/bootstrap-table.min.css">
+  <link rel="stylesheet" href="cron/jquery-cron.css">
+  <link rel="stylesheet" href="gentleSelect/jquery-gentleSelect.css">
+  <link rel="stylesheet" href="css/style.css">
+  <title>数据库备份管理中心</title>
+</head>
+
+<body>
+  <div class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="flex full-width">
+      <div class="btn btn-size" id="setting-btn" style="border-color: green; color: green;">
+        设置
+      </div>
+
+      <div class="btn btn-size" id="user-manage-btn" data-toggle="modal" data-target="#userManage"
+        style="margin-left: 10px;border-color: green; color: green;">
+        账户
+      </div>
+
+      <p id="title">数据库备份管理中心</p>
+      <div class="button-main btn btn-size" style="margin-left: 10px;" id="add-databases">
+        创建
+      </div>
+      <div class="btn btn-size" style="margin-left: 10px;border-color: green; color: green;" id="load-api">
+        API
+      </div>
+      <div class="btn btn-size" style="margin-left: 10px;border-color: green; color: green;" id="logout">
+        退出
+      </div>
+    </div>
+  </div>
+  <div id="viewer">
+    <p id="username-view"></p>
+    <table id="databases-table" class="table table-striped table-sm">
+    </table>
+    <p class="no-sheet">
+      加载中...
+    </p>
+
+    <div class="footer">
+      @2020 MySQL Backup V2.0.0
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal fade" id="userManage" tabindex="-3" role="dialog" aria-labelledby="userManageLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="user-modal-label">账户管理</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <table id="user-table" class="table table-striped table-sm">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Username</th>
+                <th scope="col">Password</th>
+                <th scope="col">Token</th>
+                <th scope="col">Edit</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+          <p class="loading">载入中...</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="add-user" data-toggle="modal"
+            data-target="#userAdd">新增</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal fade" id="userAdd" tabindex="-2" role="dialog" aria-labelledby="userAddLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">新增账户</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form>
+            <div class="form-group">
+              <label for="inputUsername">Username</label>
+              <input type="text" class="form-control" id="inputUsername">
+            </div>
+            <div class="form-group">
+              <label for="inputPassword">Password</label>
+              <input type="password" class="form-control" id="inputPassword">
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+          <button type="button" class="btn btn-primary" id="save-user">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal fade" id="setting" tabindex="-2" role="dialog" aria-labelledby="settingLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">设置（仅超级管理员有权限）</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="container-setting" style="width: 100%;height:580px;border:1px solid grey"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="del-log">清理日志</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+          <button type="button" class="btn btn-primary" id="save-setting">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal fade" id="database" tabindex="-2" role="dialog" aria-labelledby="databaseLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="database-title">创建数据库备份</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>
+            <span style="font-weight: 600;">定时任务：</span>
+            <span id='selector'></span>
+          </p>
+          <div style="margin-top: 10px;margin-left: 80px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="cron-read">读取代码中的值</button>
+            <button type="button" class="btn btn-primary btn-sm" style="margin-left: 5px;"
+              id="cron-write">写入到代码</button>
+          </div>
+          <p style="margin-top: 10px;">
+            <span style="font-weight: 600;">当前启用的对象存储：</span>
+            <span id="object-storage-list"></span>
+          </p>
+          <div id="container-database" style="margin-top: 10px; width: 100%;height:420px;border:1px solid grey"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+          <button type="button" class="btn btn-success" id="test-database">测试</button>
+          <button type="button" class="btn btn-primary" id="save-database">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal fade" id="execLog" tabindex="-3" role="dialog" aria-labelledby="execLogLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exec-log-modal-label">备份任务记录</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p style="position: absolute; left: 20px; top: 32px;">计时单位是秒</p>
+          <table id="exec-log-table" class="table table-striped table-sm"></table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal fade" id="execOtherLog" tabindex="-2" role="dialog" aria-labelledby="execOtherLogLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">相关日志</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <table id="exec-other-log-table" class="table table-striped table-sm"></table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/jquery.min.js"></script>
+  <script src="js/jquery.loading.min.js"></script>
+  <script src="js/popper.min.js"></script>
+  <script src="js/bootstrap.min.js"></script>
+  <script src="js/table-edits.js"></script>
+  <script src="js/toast.min.js"></script>
+  <script src="js/bootstrap-table.min.js"></script>
+  <script src="js/bootstrap-table-zh-CN.min.js"></script>
+  <script src="cron/jquery-cron.js"></script>
+  <script src="gentleSelect/jquery-gentleSelect.js"></script>
+  <script src="monaco-editor/min/vs/loader.js"></script>
+  <script src="js/script.js"></script>
+</body>
+
+</html>

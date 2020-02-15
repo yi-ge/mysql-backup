@@ -15,7 +15,7 @@ Demo: [https://mysql-backup.demo.wyr.me](https://mysql-backup.demo.wyr.me)
 账号：admin  
 密码：admin888  
 
-![mysql-backup](/mysql-backup.png)
+![mysql-backup](https://cdn.wyr.me/imgs/mysql-buckup-preview.gif)
 
 ## Features
 
@@ -119,6 +119,23 @@ docker run -itd --name mysql-backup --restart always \
 阿里云对象存储: [https://github.com/ali-sdk/ali-oss](https://github.com/ali-sdk/ali-oss)  
 腾讯云对象存储: [https://github.com/tencentyun/cos-nodejs-sdk-v5](https://github.com/tencentyun/cos-nodejs-sdk-v5)  
 七牛云对象存储: [https://developer.qiniu.com/kodo/sdk/1289/nodejs](https://developer.qiniu.com/kodo/sdk/1289/nodejs)
+
+## 支持的短信通知
+
+- 腾讯云
+
+短信功能需在设置中进行配置后才有效。
+
+### 短信通知模板示例
+
+- 备份成功通知（默认不启用，3为文件大小）
+  名为{1}的数据库于{2}成功备份。{3}，{4}张表，导出{5}秒，上传到{6}耗时{7}秒，总计{8}秒。
+
+- 备份失败通知
+  名为{1}的数据库于{2}备份失败。请及时登录备份管理系统查看失败原因。
+
+- 解冻成功通知
+  您在{1}解冻下载名为{2}的数据库，其中一个备份文件于{3}解冻成功，请及时登录系统进行下载。
 
 ## Q & A
 

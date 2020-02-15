@@ -12,7 +12,7 @@ import upload from './lib/object-storage/upload.js'
 archiver.registerFormat('zip-encrypted', archiverZipEncrypted)
 
 export default (db, log) => {
-  log.info('Cron is running...')
+  log.warn('Cron is running...')
 
   const dbs = new Map()
   try {
@@ -22,7 +22,6 @@ export default (db, log) => {
       for (const n in databases) {
         if (!dbs.has(databases[n].uuid) || (dbs.has(databases[n].uuid) && dbs.get(databases[n].uuid).cron !== databases[n].cron)) {
           const uuid = databases[n].uuid
-          log.info('创建了新定时任务：' + databases[n].uuid + ' (' + databases[n].cron + ')')
           const check = db.get('codes').find({
             uuid,
             deletedTime: null
@@ -50,6 +49,7 @@ export default (db, log) => {
 
             let dumpToFileName = generateUuid.v4() + '.sql'
             let dumpToFilePath = path.join(__dirname, '../db/', dumpToFileName)
+            let fileSize = 0
             let result = null
             let oldFilePath = null
             let oldFileName = null
@@ -66,6 +66,9 @@ export default (db, log) => {
                 compressFile: false
               })
 
+              const stat = fs.statSync(dumpToFilePath)
+              if (stat.isFile()) fileSize = stat.size
+
               dumpTime = new Date().getTime()
             } catch (err) {
               db.get('exec').push({
@@ -78,6 +81,7 @@ export default (db, log) => {
                 dumpTime: new Date().getTime(),
                 uploadTime: new Date().getTime(),
                 tables: null,
+                fileSize,
                 createdTime: new Date().getTime()
               }).write()
 
@@ -162,7 +166,7 @@ export default (db, log) => {
                     })
                   }
 
-                  await zipEncrypted()
+                  fileSize = await zipEncrypted()
 
                   if (oldFilePath) {
                     fs.unlink(oldFilePath, (err) => {
@@ -202,6 +206,7 @@ export default (db, log) => {
                     dumpTime,
                     uploadTime: dumpTime,
                     tables: result.tables.length,
+                    fileSize,
                     createdTime: new Date().getTime()
                   }).write()
 
@@ -269,6 +274,7 @@ export default (db, log) => {
                         dumpTime,
                         uploadTime: new Date().getTime(),
                         tables: result.tables.length,
+                        fileSize,
                         createdTime: new Date().getTime()
                       }).write()
 
@@ -289,6 +295,7 @@ export default (db, log) => {
                         dumpTime,
                         uploadTime: new Date().getTime(),
                         tables: result.tables.length,
+                        fileSize,
                         createdTime: new Date().getTime()
                       }).write()
 
@@ -323,6 +330,7 @@ export default (db, log) => {
                       dumpTime,
                       uploadTime: new Date().getTime(),
                       tables: result.tables.length,
+                      fileSize,
                       createdTime: new Date().getTime()
                     }).write()
 
@@ -386,6 +394,7 @@ export default (db, log) => {
                   dumpTime,
                   uploadTime: dumpTime,
                   tables: result.tables.length,
+                  fileSize,
                   createdTime: new Date().getTime()
                 }).write()
 
@@ -435,6 +444,7 @@ export default (db, log) => {
                 dumpTime,
                 uploadTime: dumpTime,
                 tables: result.tables.length,
+                fileSize,
                 createdTime: new Date().getTime()
               }).write()
 
@@ -493,6 +503,14 @@ export default (db, log) => {
               }
             }
           })
+
+          if (dbs.has(databases[n].uuid)) { // 如果已经存在任务，则取消旧任务
+            const oldJob = dbs.get(databases[n].uuid)
+            oldJob.job.cancel()
+            log.debug('更新了定时任务：' + databases[n].uuid + ' (' + databases[n].cron + ')')
+          } else {
+            log.debug('创建了新定时任务：' + databases[n].uuid + ' (' + databases[n].cron + ')')
+          }
 
           dbs.set(uuid, Object.assign(databases[n], {
             job

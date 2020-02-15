@@ -15,9 +15,23 @@ function formatDate (t) {
   return YY + MM + DD + ' ' + hh + mm + ss
 }
 
+function formatBytes(bytes, decimals = 2) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
 $(document).ready(function () {
   $('body').loading()
   window.isEdit = false
+
+  window.editorReady = false
+  require(['vs/editor/editor.main'], function () {
+    window.editorReady = true
+  })
 
   // tip是提示信息，type:'success'是成功信息，'danger'是失败信息,'info'是普通信息,'warning'是警告信息
   var ShowTip = function (tip, type) {
@@ -248,6 +262,14 @@ $(document).ready(function () {
                 align: 'center',
                 title: '表数量'
               }, {
+                field: 'fileSize',
+                sortable: true,
+                align: 'center',
+                title: '文件大小',
+                formatter: function (value, row, index) {
+                  return formatBytes(value)
+                }
+              }, {
                 field: 'objectStorageType',
                 sortable: true,
                 align: 'center',
@@ -340,10 +362,6 @@ $(document).ready(function () {
   }
 
   var init = function () {
-    window.editorReady = false
-    require(['vs/editor/editor.main'], function () {
-      window.editorReady = true
-    })
     $('#username-view').text('当前用户：' + window.username)
 
     getUserList(function (userList, isAdministrator) {
@@ -426,7 +444,7 @@ $(document).ready(function () {
         }
       })
 
-      $('#save-user').click(function () {
+      $('#save-user').off('click').click(function () {
         $.post({
           url: '/api/manage/user/add',
           headers: {
@@ -455,7 +473,7 @@ $(document).ready(function () {
       $('.loading').hide()
     })
 
-    $('#del-log').click(function () {
+    $('#del-log').off('click').click(function () {
       $.ajax({
         type: 'delete',
         url: '/api/log/delete',
@@ -474,6 +492,7 @@ $(document).ready(function () {
       })
     })
 
+    $('#setting').unbind('shown.bs.modal')
     $('#setting').on('shown.bs.modal', function () {
       var waitingEditor = function () {
         setTimeout(() => {
@@ -511,12 +530,12 @@ $(document).ready(function () {
       waitingEditor()
     })
 
-    $('#setting-btn').click(function () {
+    $('#setting-btn').off('click').click(function () {
       $('#setting').loading()
       $('#setting').modal('show')
     })
 
-    $('#save-setting').click(function () {
+    $('#save-setting').off('click').click(function () {
       $.post({
         url: '/api/setting',
         headers: {
@@ -539,83 +558,83 @@ $(document).ready(function () {
       })
     })
 
-    $('#add-databases').click(function () {
+    $('#database').unbind('shown.bs.modal')
+    $('#database').on('shown.bs.modal', function () {
+      $.get({
+        url: '/api/objectStorage',
+        headers: {
+          Authorization: 'Bearer ' + window.localStorage.token
+        },
+        success (data) {
+          if (data.status === 1) {
+            $('#object-storage-list').empty()
+
+            $('#object-storage-list').text(JSON.stringify(data.result))
+          } else {
+            ShowTip(data.msg, 'warning')
+          }
+        }
+      })
+
+      var waitingEditor = function () {
+        setTimeout(() => {
+          if (window.editorReady === true) {
+            $.get({
+              url: '/api/database/template',
+              headers: {
+                Authorization: 'Bearer ' + window.localStorage.token
+              },
+              success (data) {
+                if (data.status === 1) {
+                  $('#selector').empty()
+
+                  window.cron_field_time = 0
+                  window.cron_field = $('#selector').cron({
+                    initial: '0 1 * * *',
+                    onChange: function () {
+                      if (window.cron_field_time !== 0) {
+                        ShowTip('您修改了定时任务，请记得将其写入到代码。', 'info')
+                      }
+                      window.cron_field_time++
+                      // console.log($(this).cron("value"))
+                    },
+                    useGentleSelect: true
+                  })
+
+                  window.$databaseEditor = $('#container-database')
+
+                  window.$databaseEditor.empty()
+
+                  window.databaseEditor = monaco.editor.create(window.$databaseEditor[0], {
+                    value: data.result,
+                    language: 'javascript'
+                  })
+
+                  window.databaseEditor.layout()
+                } else {
+                  ShowTip(data.msg, 'warning')
+                }
+
+                $('#database').loading('stop')
+              }
+            })
+          } else {
+            waitingEditor()
+          }
+        }, 50)
+      }
+
+      waitingEditor()
+    })
+
+    $('#add-databases').off('click').click(function () {
       $('#database').loading()
       $('#database-title').text('创建数据库备份')
       window.isEdit = false
-
-      $('#database').unbind('shown.bs.modal')
-      $('#database').on('shown.bs.modal', function () {
-        $.get({
-          url: '/api/objectStorage',
-          headers: {
-            Authorization: 'Bearer ' + window.localStorage.token
-          },
-          success (data) {
-            if (data.status === 1) {
-              $('#object-storage-list').empty()
-
-              $('#object-storage-list').text(JSON.stringify(data.result))
-            } else {
-              ShowTip(data.msg, 'warning')
-            }
-          }
-        })
-
-        var waitingEditor = function () {
-          setTimeout(() => {
-            if (window.editorReady === true) {
-              $.get({
-                url: '/api/database/template',
-                headers: {
-                  Authorization: 'Bearer ' + window.localStorage.token
-                },
-                success (data) {
-                  if (data.status === 1) {
-                    $('#selector').empty()
-
-                    window.cron_field_time = 0
-                    window.cron_field = $('#selector').cron({
-                      initial: '0 1 * * *',
-                      onChange: function () {
-                        if (window.cron_field_time !== 0) {
-                          ShowTip('您修改了定时任务，请记得将其写入到代码。', 'info')
-                        }
-                        window.cron_field_time++
-                        // console.log($(this).cron("value"))
-                      },
-                      useGentleSelect: true
-                    })
-
-                    window.$databaseEditor = $('#container-database')
-
-                    window.$databaseEditor.empty()
-
-                    window.databaseEditor = monaco.editor.create(window.$databaseEditor[0], {
-                      value: data.result,
-                      language: 'javascript'
-                    })
-
-                    window.databaseEditor.layout()
-                  } else {
-                    ShowTip(data.msg, 'warning')
-                  }
-
-                  $('#database').loading('stop')
-                }
-              })
-            } else {
-              waitingEditor()
-            }
-          }, 50)
-        }
-
-        waitingEditor()
-      })
       $('#database').modal('show')
     })
 
-    $('#test-database').click(function () {
+    $('#test-database').off('click').click(function () {
       $.post({
         url: '/api/database/test',
         headers: {
@@ -648,7 +667,7 @@ $(document).ready(function () {
       })
     })
 
-    $('#save-database').click(function () {
+    $('#save-database').off('click').click(function () {
       var currentValue = window.cron_field.cron('value')
       var code = window.databaseEditor.getValue()
 
@@ -717,7 +736,7 @@ $(document).ready(function () {
       })
     })
 
-    $('#cron-read').click(function () {
+    $('#cron-read').off('click').click(function () {
       var code = window.databaseEditor.getValue()
 
       try {
@@ -729,7 +748,7 @@ $(document).ready(function () {
       }
     })
 
-    $('#cron-write').click(function () {
+    $('#cron-write').off('click').click(function () {
       var currentValue = window.cron_field.cron('value')
       var code = window.databaseEditor.getValue()
 
@@ -849,11 +868,11 @@ $(document).ready(function () {
     }
   })
 
-  $('#load-api').click(() => {
+  $('#load-api').off('click').click(() => {
     window.open('/documentation')
   })
 
-  $('#logout').click(() => {
+  $('#logout').off('click').click(() => {
     window.username = null
     window.localStorage.token = null
     window.location.href = 'admin.html'

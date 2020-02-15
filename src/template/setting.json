@@ -1,0 +1,37 @@
+{
+  "ObjectStorage": {
+    "useQINIU": false,
+    "QINIU": {
+      "accessKey": "QINIU_ACCESS_KEY",
+      "secretKey": "QINIU_SECRET_KEY",
+      "bucket": "QINIU_BUCKET_KEY",
+      "url": "https://cdn.xxx.com",
+      "zone": "Zone_z0"
+    },
+    "useCOS": false,
+    "COS": {
+      "bucket": "bucketname-12345678",
+      "region": "ap-chengdu",
+      "url": "https://cdn.xxx.com",
+      "SecretId": "COS_SECRET_ID",
+      "SecretKey": "COS_SECRET_KEY"
+    },
+    "useOSS": false,
+    "OSS": {
+      "region": "oss-cn-qingdao",
+      "accessKeyId": "",
+      "accessKeySecret": "",
+      "bucket": "bucket",
+      "internal": false,
+      "secure": true,
+      "timeout": 1200000,
+      "url": "https://cdn.xxx.com"
+    }
+  },
+  "SMS": {
+    "useSMS": false,
+    "tencent": {
+      "enable": false
+    }
+  }
+}

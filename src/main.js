@@ -1,6 +1,7 @@
 import {
   fileURLToPath
 } from 'url'
+import fs from 'fs'
 import path from 'path'
 import Fastify from 'fastify'
 import FastifyStatic from 'fastify-static'
@@ -24,7 +25,7 @@ if (typeof (__filename) === 'undefined') {
     global.__filename = fileURLToPath(
       import.meta.url)
   } catch (err) {
-    console.log(err)
+    console.error(err)
   }
 }
 
@@ -41,37 +42,8 @@ const initConfig = (config) => {
   if (!config.sessionKey) config.sessionKey = uuid.v4().split('-').join('')
   if (!config.sessionKeyCreateTime) config.sessionKeyCreateTime = new Date().getTime()
   if (!config.setting) {
-    config.setting = {
-      ObjectStorage: {
-        useQINIU: false,
-        QINIU: {
-          accessKey: 'QINIU_ACCESS_KEY',
-          secretKey: 'QINIU_SECRET_KEY',
-          bucket: 'QINIU_BUCKET_KEY',
-          url: 'https://cdn.xxx.com',
-          zone: 'Zone_z0'
-        },
-        useCOS: false,
-        COS: {
-          bucket: 'bucketname-12345678',
-          region: 'ap-chengdu',
-          url: 'https://cdn.xxx.com',
-          SecretId: 'COS_SECRE_ID',
-          SecretKey: 'COS_SECRE_KEY'
-        },
-        useOSS: false,
-        OSS: {
-          region: 'oss-cn-qingdao',
-          accessKeyId: '',
-          accessKeySecret: '',
-          bucket: 'bucket',
-          internal: false,
-          secure: true,
-          timeout: 1200000, // 20min
-          url: 'https://cdn.xxx.com'
-        }
-      }
-    }
+    let template = fs.readFileSync(path.join(__dirname, 'template', 'setting.json'), 'utf-8')
+    config.setting = JSON.parse(template)
   }
 
   return config
@@ -96,6 +68,7 @@ export const SERVER = {
 
 const fastify = Fastify({
   logger: {
+    level: isDev ? 'debug' : 'warn',
     prettyPrint: true
   }
 })
@@ -191,7 +164,8 @@ fastify.ready(err => {
 
 fastify.listen(SERVER.port, SERVER.host, (err, address) => {
   if (err) throw err
-  fastify.log.info(`server listening on ${address}`)
+  fastify.log.warn(`Server listening on ${address}`)
+  fastify.log.debug(`Run in DEV mode.`)
 })
 
 bootstrap(db, fastify.log)

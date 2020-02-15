@@ -554,7 +554,7 @@ export default [{
         .value()
 
       if (user) {
-        let template = fs.readFileSync(path.join(__dirname, 'template', 'databases.js'), 'utf-8')
+        let template = fs.readFileSync(path.join(__dirname, 'template', 'mysql.js'), 'utf-8')
 
         template = template.replace(/uuid: '(.*)'/i, 'uuid: \'' + this.$uuid.v4() + '\'')
 

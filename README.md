@@ -27,19 +27,22 @@ Demo: [https://mysql-backup.demo.wyr.me](https://mysql-backup.demo.wyr.me)
 6. 支持 Swagger UI 查看 API，方便与其它系统整合。
 7. 支持`超级管理员`添加多个`普通管理员`，`超级管理员`可以管理所有数据库，`普通管理员`之间内容互不可见，适合普通开发团队的使用场景。
 8. 由于此系统仅为灾备设计，仅支持全量备份，默认备份`数据+结构`（包含视图、触发器等），不支持增量备份。如果您的数据非常重要，请勿将此作为唯一备份系统，可配合服务商提供的备份功能使用。
+9. 兼容支持手机端访问。
 
 ## 使用方法
 
 ```bash
 docker run -itd --name mysql-backup --restart always \
     -v /etc/localtime:/etc/localtime:ro \
-    -p 80:80 \
+    -v /data/db:/usr/src/app/db \
+    -p 8080:80 \
     wy373226722/mysql-backup:latest
 ```
 
-为确保定时任务准确执行，请确保服务器的时区和时间设置正常。
+**注意事项：**  
 
-请勿重复点击某个保存按钮，前端没有做重复点击限制。请谨慎操作。
+1. 为确保定时任务准确执行，请确保服务器宿主机的时区和时间设置正常。
+2. 请修改`-v /data/db:/usr/src/app/db`为本地数据库存储路径，经Docker升级程序可不丢失数据。
 
 **国内用户高速通道:**  
 
@@ -69,6 +72,7 @@ docker run --detach \
 
 docker run -itd --name mysql-backup --restart always \
     -v /etc/localtime:/etc/localtime:ro \
+    -v /data/db:/usr/src/app/db \
     --env "VIRTUAL_PORT=80" \
     --env "VIRTUAL_HOST=你的域名" \
     --env "LETSENCRYPT_HOST=你的域名" \
@@ -123,19 +127,31 @@ docker run -itd --name mysql-backup --restart always \
 ## 支持的短信通知
 
 - 腾讯云
+- SUBMAIL
 
 短信功能需在设置中进行配置后才有效。
 
-### 短信通知模板示例
+### 短信通知模板示例1 （适用于腾讯云）
 
 - 备份成功通知（默认不启用，3为文件大小）
-  名为{1}的数据库于{2}成功备份。{3}，{4}张表，导出{5}秒，上传到{6}耗时{7}秒，总计{8}秒。
+  名为"{1}"的数据库于{2}成功备份。{3}，{4}张表，导出{5}秒，上传到{6}耗时{7}秒，总计{8}秒。
 
 - 备份失败通知
-  名为{1}的数据库于{2}备份失败。请及时登录备份管理系统查看失败原因。
+  名为"{1}"的数据库于{2}备份失败。请及时登录备份管理系统查看失败原因。
 
 - 解冻成功通知
-  您在{1}解冻下载名为{2}的数据库，其中一个备份文件于{3}解冻成功，请及时登录系统进行下载。
+  您在{1}解冻下载名为"{2}"的数据库，其中一个备份文件于{3}解冻成功，请及时登录系统进行下载。
+
+### 短信通知模板示例2 （适用于SUBMAIL）
+
+- 备份成功通知（默认不启用）
+  名为"@var(name)"的数据库于@var(createdTime)成功备份。@var(fileSize)，@var(tablesSum)张表，导出@var(dumpTime)秒，上传到@var(objectStorageType)耗时@var(uploadTime)秒，总计@var(jobTime)秒。
+
+- 备份失败通知
+  名为"@var(name)"的数据库于@var(createdTime)备份失败。请及时登录备份管理系统查看失败原因。
+
+- 解冻成功通知
+  您在@var(createdTime)解冻下载名为"@var(name)"的数据库，其中一个备份文件于@var(successTime)解冻成功，请及时登录系统进行下载。
 
 ## Q & A
 

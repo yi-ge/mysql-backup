@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import vm from 'vm'
 import mysql from 'mysql2/promise.js'
+import sendSMS from './lib/sms/index.js'
 
 const verify = (request) => {
   return new Promise((resolve, reject) => {
@@ -1515,6 +1516,35 @@ export default [{
         }).cloneDeep().value()
 
         const res = await this.$restoreObject(exec.objectName, exec.objectStorageType)
+        res.enableSMS = false
+
+        const config = this.$db.get('config').cloneDeep().value()
+
+        if (config.setting.SMS.enable && typeof config.setting.SMS.enable === "string") {
+          const type = config.setting.SMS.enable
+
+          if (type.length > 0 && config.setting.SMS[type].action.includes('downloadReady')) {
+            const createdTime = this.$moment().format('MM月DD日HH:mm')
+            const sendSMSHandler = () => {
+              setTimeout(async () => {
+                const restoreRes = await this.$restoreObject(exec.objectName, exec.objectStorageType)
+                if (restoreRes.status === 3) {
+                  sendSMS('downloadReady', {
+                    createdTime,
+                    name: exec.name,
+                    successTime: this.$moment().format('MM月DD日HH:mm')
+                  })
+                } else if (restoreRes.status === 1 || restoreRes.status === 2) {
+                  sendSMSHandler()
+                }
+              }, 10000)
+            }
+
+            sendSMSHandler()
+
+            res.enableSMS = true
+          }
+        }
 
         this.$db.get('logs').push({
           action: 'get-exec-download',

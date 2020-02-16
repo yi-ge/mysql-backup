@@ -29,9 +29,32 @@
     }
   },
   "SMS": {
-    "useSMS": false,
+    "enable": false,
+    "提示信息": "启用短信功能请将enable字段设置为下方对应的短信功能提供商名称。例如\"enable\": \"tencent\"",
     "tencent": {
-      "enable": false
+      "appid": 1400000000,
+      "appkey": "短信应用SDK AppKey，AppID是1400开头",
+      "phoneNumbers": ["需要接收短信的手机号码，字符串格式"],
+      "templateIDs": {
+        "提示信息": "真实的模板ID需要在短信控制台中申请后添加至此",
+        "success": 1234,
+        "failed": 1234,
+        "downloadReady": 1234
+      },
+      "action": ["failed", "downloadReady", "启用的事件。默认成功不通知，失败和下载解冻成功通知"],
+      "smsSign": "签名名称。请使用真实的已申请的签名, 签名参数使用的是`签名内容`，而不是`签名ID`"
+    },
+    "submail": {
+      "appid": 10000,
+      "appkey": "APPID对应的APPKEY",
+      "phoneNumbers": ["需要接收短信的手机号码，字符串格式"],
+      "templateIDs": {
+        "提示信息": "真实的模板ID需要在SUBMAIL管理后台中申请后添加至此",
+        "success": "AziPd3",
+        "failed": "xxx",
+        "downloadReady": "xxx"
+      },
+      "action": ["failed", "downloadReady", "启用的事件。默认成功不通知，失败和下载解冻成功通知"]
     }
   }
 }

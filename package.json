@@ -1,6 +1,6 @@
 {
   "name": "mysql-backup",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Automatically get your mysql database backup and uploading it to the Object Storage.",
   "main": "src/main.js",
   "scripts": {
@@ -29,6 +29,7 @@
     "ali-oss": "^6.5.1",
     "archiver": "^3.1.1",
     "archiver-zip-encrypted": "^1.0.8",
+    "axios": "^0.19.2",
     "cos-nodejs-sdk-v5": "^2.5.14",
     "dayjs": "^1.8.19",
     "fastify": "^2.11.0",
@@ -43,6 +44,7 @@
     "mysqldump": "^3.1.0",
     "node-schedule": "^1.3.2",
     "pino-pretty": "^3.5.0",
+    "qcloudsms_js": "^0.1.1",
     "qiniu": "https://github.com/yi-ge/nodejs-sdk",
     "request": "^2.88.2",
     "uuid": "^3.4.0"

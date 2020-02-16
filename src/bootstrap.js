@@ -6,10 +6,32 @@ import archiverZipEncrypted from 'archiver-zip-encrypted'
 import mysqldump from 'mysqldump'
 import schedule from 'node-schedule'
 import upload from './lib/object-storage/upload.js'
+import sendSMS from './lib/sms/index.js'
+import dayjs from 'dayjs'
 
 // register format for archiver
 // note: only do it once per Node.js process/application, as duplicate registration will throw an error
 archiver.registerFormat('zip-encrypted', archiverZipEncrypted)
+
+const getObjectStorageType = (value) => {
+  switch (value) {
+    case 'qiniu':
+      return '七牛云'
+    case 'oss':
+      return '阿里云'
+    case 'cos':
+      return '腾讯云'
+  }
+}
+
+const formatBytes = (bytes, decimals = 2) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
 
 export default (db, log) => {
   log.warn('Cron is running...')
@@ -32,6 +54,8 @@ export default (db, log) => {
           }
 
           const job = schedule.scheduleJob(databases[n].cron, async () => {
+            let success = false
+            const name = databases[n].name
             const startTime = new Date().getTime()
             let execUUID = generateUuid.v4()
             const check = db.get('codes').find({
@@ -84,6 +108,14 @@ export default (db, log) => {
                 fileSize,
                 createdTime: new Date().getTime()
               }).write()
+
+              if (!success) {
+                log.debug('发送失败短信')
+                sendSMS('failed', {
+                  name,
+                  createdTime: dayjs().format('MM月DD日HH:mm')
+                })
+              }
 
               db.get('codes').find({
                 uuid
@@ -210,6 +242,14 @@ export default (db, log) => {
                     createdTime: new Date().getTime()
                   }).write()
 
+                  if (!success) {
+                    log.debug('发送失败短信')
+                    sendSMS('failed', {
+                      name,
+                      createdTime: dayjs().format('MM月DD日HH:mm')
+                    })
+                  }
+
                   db.get('codes').find({
                     uuid
                   }).assign({
@@ -264,7 +304,11 @@ export default (db, log) => {
                     jobTime--
                     if (res.objectName) {
                       // 写入日志
+                      const createdTime = new Date().getTime()
+
+                      success = true
                       db.get('exec').push({
+                        name,
                         execUUID: res.execUUID,
                         uuid,
                         success: true,
@@ -272,11 +316,23 @@ export default (db, log) => {
                         objectStorageType: res.objectStorageType,
                         startTime,
                         dumpTime,
-                        uploadTime: new Date().getTime(),
+                        uploadTime: createdTime,
                         tables: result.tables.length,
                         fileSize,
-                        createdTime: new Date().getTime()
+                        createdTime,
                       }).write()
+
+                      log.debug('发送成功短信')
+                      sendSMS('success', {
+                        name,
+                        createdTime: dayjs().format('MM月DD日HH:mm'),
+                        fileSize: formatBytes(fileSize),
+                        tablesSum: String(result.tables.length),
+                        dumpTime: String((dumpTime - startTime) / 1000),
+                        objectStorageType: getObjectStorageType(res.objectStorageType),
+                        uploadTime: String((createdTime - dumpTime) / 1000),
+                        jobTime: String((createdTime - startTime) / 1000)
+                      })
 
                       db.get('codes').find({
                         uuid
@@ -298,6 +354,14 @@ export default (db, log) => {
                         fileSize,
                         createdTime: new Date().getTime()
                       }).write()
+
+                      if (!success) {
+                        log.debug('发送失败短信')
+                        sendSMS('failed', {
+                          name,
+                          createdTime: dayjs().format('MM月DD日HH:mm')
+                        })
+                      }
 
                       db.get('codes').find({
                         uuid
@@ -333,6 +397,14 @@ export default (db, log) => {
                       fileSize,
                       createdTime: new Date().getTime()
                     }).write()
+
+                    if (!success) {
+                      log.debug('发送失败短信')
+                      sendSMS('failed', {
+                        name,
+                        createdTime: dayjs().format('MM月DD日HH:mm')
+                      })
+                    }
 
                     db.get('codes').find({
                       uuid
@@ -398,6 +470,14 @@ export default (db, log) => {
                   createdTime: new Date().getTime()
                 }).write()
 
+                if (!success) {
+                  log.debug('发送失败短信')
+                  sendSMS('failed', {
+                    name,
+                    createdTime: dayjs().format('MM月DD日HH:mm')
+                  })
+                }
+
                 db.get('codes').find({
                   uuid
                 }).assign({
@@ -447,6 +527,14 @@ export default (db, log) => {
                 fileSize,
                 createdTime: new Date().getTime()
               }).write()
+
+              if (!success) {
+                log.debug('发送失败短信')
+                sendSMS('failed', {
+                  name,
+                  createdTime: dayjs().format('MM月DD日HH:mm')
+                })
+              }
 
               db.get('codes').find({
                 uuid

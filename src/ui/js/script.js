@@ -76,6 +76,16 @@ $(document).ready(function () {
                 type: 'info',
                 delay: 30000
               })
+
+              if (data.result.enableSMS) {
+                $.toast({
+                  title: '提示',
+                  subtitle: '您已开启短信提醒',
+                  content: '文件已开始解冻，您可以暂时关闭窗口，解冻成功后您将收到短信。',
+                  type: 'warning',
+                  delay: 30000
+                })
+              }
             } else if (data.result.status === 2) {
               $.toast({
                 title: '解冻中',
@@ -84,6 +94,16 @@ $(document).ready(function () {
                 type: 'warning',
                 delay: 30000
               })
+
+              if (data.result.enableSMS) {
+                $.toast({
+                  title: '提示',
+                  subtitle: '您已开启短信提醒',
+                  content: '解冻成功后您将收到短信。',
+                  type: 'warning',
+                  delay: 30000
+                })
+              }
             } else if (data.result.status === 3) {
               ShowTip('解冻成功，开始下载。', 'success')
               window.open('/api/database/download?key=' + data.result.key)
@@ -248,8 +268,9 @@ $(document).ready(function () {
                 title: '任务开始时间',
                 sortable: true,
                 align: 'center',
+                width: 180,
                 formatter: function (value, row, index) {
-                  return formatDate(value)
+                  return '<div style="min-width: 180px;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">' + formatDate(value) + '</div>' 
                 }
               }, {
                 field: 'success',
@@ -313,13 +334,14 @@ $(document).ready(function () {
                 align: 'center',
                 clickToSelect: false,
                 events: window.logOperateEvents,
+                width: 140,
                 formatter: function (value, row, index) {
-                  return `<div class="button button-small download">
+                  return `<div style="min-width: 140px;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;"><div class="button button-small download">
                   解冻下载
                 </div>
                 <div class="button button-small exec-about-log" style="margin-left: 5px">
                   相关日志
-                </div>`
+                </div></div>`
                 }
               }],
               data: logList
@@ -789,7 +811,11 @@ $(document).ready(function () {
                 sortable: true,
                 align: 'center',
                 valign: 'middle',
-                title: '名称'
+                title: '名称',
+                width: 270,
+                formatter: function (value, row, index) {
+                  return '<div style="min-width: 270px;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">' + value + '</div>' 
+                }
               }, {
                 field: 'serviceProvider',
                 sortable: true,
@@ -811,7 +837,7 @@ $(document).ready(function () {
                 sortable: true,
                 align: 'center',
                 formatter: function (value, row, index) {
-                  return value ? formatDate(value) : '暂无'
+                  return '<div style="min-width: 180px;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;">' + (value ? formatDate(value) : '暂无') + '</div>' 
                 }
               }, {
                 title: '操作',
@@ -821,7 +847,7 @@ $(document).ready(function () {
                 width: 180,
                 events: window.operateEvents,
                 formatter: function (value, row, index) {
-                  return `<div class="button button-small edit-btn" style="margin-right: 5px">
+                  return `<div style="min-width: 180px;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;"><div class="button button-small edit-btn" style="margin-right: 5px">
                   更新
                 </div>
                 <div class="button button-small log-btn" style="margin-right: 5px">
@@ -829,7 +855,7 @@ $(document).ready(function () {
                 </div>
                 <div class="button button-small del-btn">
                   删除
-                </div>`
+                </div></div>`
                 }
               }],
               data: databaseList

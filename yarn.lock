@@ -3004,6 +3004,11 @@ punycode@^2.1.0, punycode@^2.1.1:
   resolved "https://mirrors.huaweicloud.com/repository/npm/punycode/-/punycode-2.1.1.tgz#b58b010ac40c22c5657616c8d2c2c02c7bf479ec"
   integrity sha512-XRsRjdf+j5ml+y/6GKHPZbrF/8p2Yga0JPtdqTIY2Xe5ohJPD9saDJJLPvp9+NSBprVvevdXZybnj2cv8OEd0A==
 
+qcloudsms_js@^0.1.1:
+  version "0.1.1"
+  resolved "https://mirrors.huaweicloud.com/repository/npm/qcloudsms_js/-/qcloudsms_js-0.1.1.tgz#e042b683ba1312a20d7dd0322446f20fd3dc644a"
+  integrity sha512-ewdlD32XF0BkV5sGNCFHCR9FSf6fi6PijJGX1YkowFziycYUyoCThDWKM0aeZG6kSQ1y8qHHBYFhAl7JTSlhuQ==
+
 "qiniu@https://github.com/yi-ge/nodejs-sdk":
   version "7.3.0"
   resolved "https://github.com/yi-ge/nodejs-sdk#502bf1fc736c6f4598a04d06e5d6a82f9bcc994e"

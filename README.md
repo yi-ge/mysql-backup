@@ -169,3 +169,9 @@ docker run -itd --name mysql-backup --restart always \
 
 5. 是否具备删除对象存储中备份数据的功能？  
   A: 不具备。在对象存储中的数据以“年/月/日”路径存储。为防止极端情况下导致数据被删除，故而不提供直接删除对象存储中备份数据的功能。
+
+## 相关博文
+
+[开源MySQL定时备份系统](https://www.wyr.me/post/614)
+
+

@@ -172,3 +172,7 @@ docker run -itd --name mysql-backup --restart always \
 
 6. MySQL8 支持？
    A: 支持 MySQL8，建议添加专属备份账号，使用 MySQL 自带身份认证。由于 mysqldump 模块限制，SHA2 认证方式尚未支持，此功能将随组件更新。
+
+## 相关博文
+
+[开源 MySQL 定时备份系统](https://www.wyr.me/post/614)

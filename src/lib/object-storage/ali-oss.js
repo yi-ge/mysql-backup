@@ -8,7 +8,8 @@ import db from '../db.js'
  * @param localFile
  */
 export const uploadMultipart = async (objectName, localFile) => {
-  const config = db.get('config').cloneDeep().value()
+  await db.read()
+  const config = db.data.config
 
   if (!config.setting.ObjectStorage.useOSS) {
     return null
@@ -34,7 +35,8 @@ export const uploadMultipart = async (objectName, localFile) => {
  * @param {string} objectName
  */
 export const restoreObject = async (objectName) => {
-  const config = db.get('config').cloneDeep().value()
+  await db.read()
+  const config = db.data.config
 
   if (!config.setting.ObjectStorage.useOSS) {
     return null
@@ -77,7 +79,8 @@ export const restoreObject = async (objectName) => {
  * @param {string} objectName
  */
 export const downloadObject = async (objectName) => {
-  const config = db.get('config').cloneDeep().value()
+  await db.read()
+  const config = db.data.config
 
   if (!config.setting.ObjectStorage.useOSS) {
     return null

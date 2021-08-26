@@ -2,8 +2,9 @@ import COSSDK from 'cos-nodejs-sdk-v5'
 import db from '../db.js'
 import { Transform } from 'stream'
 
-export const uploadToCOS = (key, filePath) => {
-  const config = db.get('config').value()
+export const uploadToCOS = async (key, filePath) => {
+  await db.read()
+  const config = db.data.config
 
   if (!config.setting.ObjectStorage.useCOS) {
     return null
@@ -50,7 +51,8 @@ export const uploadToCOS = (key, filePath) => {
  * @param {string} objectName
  */
 export const restoreObject = async (objectName) => {
-  const config = db.get('config').value()
+  await db.read()
+  const config = db.data.config
 
   if (!config.setting.ObjectStorage.useCOS) {
     return null
@@ -139,7 +141,8 @@ export const restoreObject = async (objectName) => {
  * @param {string} objectName
  */
 export const downloadObject = async (objectName) => {
-  const config = db.get('config').value()
+  await db.read()
+  const config = db.data.config
 
   if (!config.setting.ObjectStorage.useCOS) {
     return null

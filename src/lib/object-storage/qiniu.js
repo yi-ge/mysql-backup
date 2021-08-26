@@ -2,8 +2,9 @@ import qiniu from 'qiniu'
 import request from 'request'
 import db from '../db.js'
 
-export const uploadLocalFileToQiniu = (key, localFile) => {
-  const dbConfig = db.get('config').value()
+export const uploadLocalFileToQiniu = async (key, localFile) => {
+  await db.read()
+  const dbConfig = db.data.config
 
   if (!dbConfig.setting.ObjectStorage.useQINIU) {
     return null
@@ -64,7 +65,8 @@ export const uploadLocalFileToQiniu = (key, localFile) => {
  * @param {string} objectName
  */
 export const restoreObject = async (objectName) => {
-  const dbConfig = db.get('config').value()
+  await db.read()
+  const dbConfig = db.data.config
 
   if (!dbConfig.setting.ObjectStorage.useQINIU) {
     return null
@@ -120,7 +122,8 @@ export const restoreObject = async (objectName) => {
  * @param {string} objectName
  */
 export const downloadObject = async (objectName) => {
-  const dbConfig = db.get('config').value()
+  await db.read()
+  const dbConfig = db.data.config
 
   if (!dbConfig.setting.ObjectStorage.useQINIU) {
     return null

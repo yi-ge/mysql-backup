@@ -7,7 +7,6 @@ const request = axios.create({
   }
 })
 
-
 export const sendSMS = async (action, params, SMSConfig) => {
   const appid = SMSConfig.appid
   const appkey = SMSConfig.appkey

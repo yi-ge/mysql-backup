@@ -19,7 +19,7 @@ export default async (key, type) => {
           status = res.status
           const tier = res.Tier
 
-          switch(tier) {
+          switch (tier) {
             case 'Standard':
               waitingTime = '3-5个小时'
               break
@@ -80,7 +80,7 @@ export default async (key, type) => {
           objectStorageType: type
         }
       }
-    
+
     default:
       return {
         status: -100,

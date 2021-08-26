@@ -11,9 +11,12 @@ Automatically get your mysql database backup and uploading it to the Object Stor
 
 Demo: [https://mysql-backup.demo.wyr.me](https://mysql-backup.demo.wyr.me)
 
-默认超级管理员  
-账号：admin  
+默认超级管理员
+
+```textpalin
+账号：admin
 密码：admin888
+```
 
 ![mysql-backup](https://cdn.wyr.me/imgs/mysql-buckup-preview.gif)
 
@@ -58,6 +61,7 @@ docker run --detach \
     --name nginx-proxy \
     --publish 80:80 \
     --publish 443:443 \
+    -e ENABLE_IPV6=true \
     --volume /etc/nginx/certs \
     --volume /etc/nginx/vhost.d \
     --volume /usr/share/nginx/html \
@@ -65,10 +69,12 @@ docker run --detach \
     jwilder/nginx-proxy
 
 docker run --detach \
-    --name nginx-proxy-letsencrypt \
+    --name nginx-proxy-acme \
     --volumes-from nginx-proxy \
     --volume /var/run/docker.sock:/var/run/docker.sock:ro \
-    jrcs/letsencrypt-nginx-proxy-companion
+    --volume acme:/etc/acme.sh \
+    --env "DEFAULT_EMAIL=mail@yourdomain.tld" \
+    nginxproxy/acme-companion
 
 docker run -itd --name mysql-backup --restart always \
     -v /etc/localtime:/etc/localtime:ro \

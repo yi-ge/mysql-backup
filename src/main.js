@@ -8,7 +8,7 @@ import FastifyStatic from 'fastify-static'
 import FastifySwagger from 'fastify-swagger'
 import FastifyJWT from 'fastify-jwt'
 import FastifyCORS from 'fastify-cors'
-import uuid from 'uuid'
+import { v4 as uuid } from 'uuid'
 import dayjs from 'dayjs'
 import db from './lib/db.js'
 import auth from './lib/auth.js'
@@ -16,6 +16,7 @@ import services from './services.js'
 import bootstrap from './bootstrap.js'
 import restoreObject from './lib/object-storage/restore.js'
 import downloadObject from './lib/object-storage/download.js'
+import { deepClone } from './lib/tool.js'
 
 const isDev = process.env.NODE_ENV ? process.env.NODE_ENV === 'development' : false
 
@@ -33,13 +34,13 @@ if (typeof (__dirname) === 'undefined') {
   global.__dirname = path.dirname(__filename)
 }
 
-const initConfig = (config) => {
+const initConfig = async (config) => {
   if (config.sessionKeyCreateTime && new Date().getTime() - config.sessionKeyCreateTime > 28 * 24 * 3600 * 1000) {
     config.sessionKey = null
     config.sessionKeyCreateTime = null
   }
 
-  if (!config.sessionKey) config.sessionKey = uuid.v4().split('-').join('')
+  if (!config.sessionKey) config.sessionKey = uuid().split('-').join('')
   if (!config.sessionKeyCreateTime) config.sessionKeyCreateTime = new Date().getTime()
   if (!config.setting) {
     let template = fs.readFileSync(path.join(__dirname, 'template', 'setting.json'), 'utf-8')
@@ -49,11 +50,9 @@ const initConfig = (config) => {
   return config
 }
 
-let config = db.get('config').value()
-
-config = initConfig(config)
-
-db.set('config', config).write()
+let config = await initConfig(db.data.config)
+db.data.config = config
+await db.write()
 
 // 系统配置
 export const SYSTEM = {
@@ -81,6 +80,7 @@ Object.assign(fastify, {
   $moment: dayjs,
   $restoreObject: restoreObject,
   $downloadObject: downloadObject,
+  $deepClone: deepClone,
   /**
    * send success data
    */
@@ -151,9 +151,7 @@ fastify.register(FastifyJWT, {
   }
 })
 
-fastify.register(FastifyCORS, {
-  // put your options here
-})
+fastify.register(FastifyCORS)
 
 services.map(item => fastify.route(item))
 

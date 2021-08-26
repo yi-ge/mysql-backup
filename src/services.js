@@ -43,12 +43,10 @@ export default [{
       })
     }
 
+    await this.$db.read()
+
     // Find
-    const user = this.$db.get('users')
-      .find({
-        token: request.body.token
-      })
-      .value()
+    const user = this.$db.data.users.find(i => i.token === request.body.token)
 
     if (user) {
       const username = user.username
@@ -62,7 +60,7 @@ export default [{
         return sign(payload)
       }
 
-      this.$db.get('logs').push({
+      this.$db.data.logs.push({
         action: 'auth',
         success: true,
         result: {
@@ -70,7 +68,9 @@ export default [{
           token: request.body.token
         },
         createdTime: new Date().getTime()
-      }).write()
+      })
+
+      await this.$db.write()
 
       return this.success({
         token: await generateJWT({
@@ -78,7 +78,7 @@ export default [{
         })
       }, 1)
     } else {
-      this.$db.get('logs').push({
+      this.$db.data.logs.push({
         action: 'auth',
         success: false,
         result: {
@@ -86,7 +86,9 @@ export default [{
           token: request.body.token
         },
         createdTime: new Date().getTime()
-      }).write()
+      })
+
+      await this.$db.write()
     }
 
     return this.fail(null, 403, '认证失败。')
@@ -129,11 +131,10 @@ export default [{
     const username = request.body.username
 
     // Find
-    const user = this.$db.get('users')
-      .find({
-        username
-      })
-      .value()
+    await this.$db.read()
+    const user = this.$db.data.users.find(i => i.username === username)
+
+    if (!user) return this.fail(null, 403, '认证失败。')
 
     if (this.$auth.createPassword(request.body.password) === user.password) {
       const generateJWT = (jwtInfo) => {
@@ -146,14 +147,16 @@ export default [{
         return sign(payload)
       }
 
-      this.$db.get('logs').push({
+      this.$db.data.logs.push({
         action: 'login',
         success: true,
         result: {
           username
         },
         createdTime: new Date().getTime()
-      }).write()
+      })
+
+      await this.$db.write()
 
       return this.success({
         token: await generateJWT({
@@ -161,7 +164,7 @@ export default [{
         })
       }, 1)
     } else {
-      this.$db.get('logs').push({
+      this.$db.data.logs.push({
         action: 'login',
         success: false,
         result: {
@@ -170,7 +173,9 @@ export default [{
           password: request.body.password
         },
         createdTime: new Date().getTime()
-      }).write()
+      })
+
+      await this.$db.write()
     }
 
     return this.fail(null, 403, '认证失败。')
@@ -217,16 +222,13 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .cloneDeep()
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
-      if (user.isAdministrator === true) { // 超级管理员
+      if (user && user.isAdministrator === true) { // 超级管理员
         // Find
-        const users = this.$db.get('users').sortBy('createdTime').cloneDeep().value()
+        const users = this.$deepClone(this.$db.data.users.sort((a, b) => b.createdTime - a.createdTime))
 
         for (const n in users) {
           users[n].password = ''
@@ -237,15 +239,17 @@ export default [{
           isAdministrator: true
         }, 1)
       } else if (user.username) {
-        user.password = ''
+        const userObj = this.$deepClone(user)
+        userObj.password = ''
         return this.success({
-          userList: [user],
+          userList: [userObj],
           isAdministrator: false
         }, 1)
       }
 
       return this.fail(null, -1, '没有权限。')
     } catch (err) {
+      this.log.error(err)
       return this.fail(null, 403, '认证失败。')
     }
   }
@@ -267,14 +271,14 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
+
+      if (!user) return this.fail(null, 403, '认证失败。')
 
       if (user.isAdministrator !== true && request.body.username !== username) { // 非超级管理员且修改的不是自己的数据
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'edit-user',
           success: false,
           result: {
@@ -282,22 +286,21 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
 
       if (!request.body.password || request.body.password === '') {
-        this.$db.get('users')
-          .find({
-            username: request.body.username
-          })
-          .assign({
-            token: request.body.token
-          })
-          .write()
+        const userTmp = this.$db.data.users.find(i => i.username === request.body.username)
 
-        this.$db.get('logs').push({
+        Object.assign(userTmp, {
+          token: request.body.token
+        })
+
+        this.$db.data.logs.push({
           action: 'edit-user',
           success: true,
           result: {
@@ -305,19 +308,18 @@ export default [{
             msg: 'token'
           },
           createdTime: new Date().getTime()
-        }).write()
-      } else {
-        this.$db.get('users')
-          .find({
-            username: request.body.username
-          })
-          .assign({
-            password: this.$auth.createPassword(request.body.password),
-            token: request.body.token
-          })
-          .write()
+        })
 
-        this.$db.get('logs').push({
+        await this.$db.write()
+      } else {
+        const userTmp = this.$db.data.users.find(i => i.username === request.body.username)
+
+        Object.assign(userTmp, {
+          password: this.$auth.createPassword(request.body.password),
+          token: request.body.token
+        })
+
+        this.$db.data.logs.push({
           action: 'edit-user',
           success: true,
           result: {
@@ -325,7 +327,9 @@ export default [{
             msg: 'Password and token'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
       }
 
       return this.success(null, 1)
@@ -351,19 +355,13 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user.isAdministrator === true) { // 当前用户是超级管理员
         // Check
-        const checkUser = this.$db.get('users')
-          .find({
-            username: request.body.username
-          })
-          .value()
+        const checkUser = this.$db.data.users.find(i => i.username === request.body.username)
 
         if (checkUser) {
           return this.fail(null, -1, '该用户名已存在。')
@@ -372,25 +370,27 @@ export default [{
         const user = {
           username: request.body.username,
           password: this.$auth.createPassword(request.body.password),
-          token: this.$uuid.v4(),
+          token: this.$uuid(),
           isAdministrator: false,
           createdTime: new Date().getTime()
         }
 
-        this.$db.get('users').push(user).write()
+        this.$db.data.users.push(user)
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'register',
           success: true,
           result: {
             username: request.body.username
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(null, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'register',
           success: false,
           result: {
@@ -399,7 +399,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -425,27 +427,27 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
-      if (user.isAdministrator === true) { // 超级管理员
-        const config = this.$db.get('config').cloneDeep().value()
+      if (user.isAdministrator) { // 超级管理员
+        const config = this.$db.data.config
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-setting',
           success: true,
           result: {
             username
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(JSON.stringify(config.setting), 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-setting',
           success: false,
           result: {
@@ -453,7 +455,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -488,21 +492,17 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user.isAdministrator === true) { // 超级管理员
         const setting = request.body.setting
-        const config = this.$db.get('config').value()
+        const config = this.$db.data.config
 
         config.setting = JSON.parse(setting)
 
-        this.$db.set('config', config).write()
-
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'set-setting',
           success: true,
           result: {
@@ -510,11 +510,13 @@ export default [{
             setting
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(null, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'set-setting',
           success: false,
           result: {
@@ -522,7 +524,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -548,16 +552,14 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) {
         let template = fs.readFileSync(path.join(__dirname, 'template', 'mysql.js'), 'utf-8')
 
-        template = template.replace(/uuid: '(.*)'/i, 'uuid: \'' + this.$uuid.v4() + '\'')
+        template = template.replace(/uuid: '(.*)'/i, 'uuid: \'' + this.$uuid() + '\'')
 
         return this.success(template, 1)
       } else {
@@ -594,11 +596,9 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         const code = request.body.code
@@ -673,11 +673,9 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         const code = request.body.code
@@ -690,8 +688,8 @@ export default [{
 
           const res = context.main()
 
-          this.$db.get('databases').push(res).write()
-          this.$db.get('codes').push({
+          this.$db.data.databases.push(res)
+          this.$db.data.codes.push({
             username,
             code,
             uuid: res.uuid,
@@ -702,9 +700,9 @@ export default [{
             createdTime: new Date().getTime(),
             updatedTime: new Date().getTime(),
             deletedTime: null
-          }).write()
+          })
 
-          this.$db.get('logs').push({
+          this.$db.data.logs.push({
             action: 'add-database',
             success: true,
             result: {
@@ -712,14 +710,16 @@ export default [{
               code
             },
             createdTime: new Date().getTime()
-          }).write()
+          })
+
+          await this.$db.write()
 
           return this.success(null, 1)
         } catch (err) {
           return this.fail(err.toString(), -11, 'Code Error.')
         }
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'add-database',
           success: false,
           result: {
@@ -727,7 +727,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -766,11 +768,9 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         const code = request.body.code
@@ -785,12 +785,13 @@ export default [{
 
           const uuid = request.body.uuid
 
-          this.$db.get('databases').find({
-            uuid
-          }).assign(res).write()
-          this.$db.get('codes').find({
-            uuid
-          }).assign({
+          const database = this.$db.data.databases.find(i => i.uuid === uuid)
+
+          Object.assign(database, res)
+
+          const code = this.$db.data.codes.find(i => i.uuid === uuid)
+
+          Object.assign(code, {
             username,
             code,
             uuid: res.uuid,
@@ -798,9 +799,9 @@ export default [{
             serviceProvider: res.serviceProvider,
             remarks: res.remarks,
             updatedTime: new Date().getTime()
-          }).write()
+          })
 
-          this.$db.get('logs').push({
+          this.$db.data.logs.push({
             action: 'edit-database',
             success: true,
             result: {
@@ -809,14 +810,16 @@ export default [{
               uuid
             },
             createdTime: new Date().getTime()
-          }).write()
+          })
+
+          await this.$db.write()
 
           return this.success(null, 1)
         } catch (err) {
           return this.fail(err.toString(), -11, 'Code Error.')
         }
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'edit-database',
           success: false,
           result: {
@@ -824,7 +827,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -850,15 +855,12 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
-        const config = this.$db.get('config').cloneDeep().value()
-
+        const config = this.$db.data.config
         const setting = config.setting
 
         const res = []
@@ -867,7 +869,7 @@ export default [{
         if (setting.ObjectStorage.useCOS) res.push('cos')
         if (setting.ObjectStorage.useOSS) res.push('oss')
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'view-setting',
           success: true,
           result: {
@@ -875,11 +877,11 @@ export default [{
             res
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
 
         return this.success(res, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'view-setting',
           success: false,
           result: {
@@ -887,7 +889,7 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -913,29 +915,16 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
-        let codes = null
-
-        if (user.isAdministrator === true) {
-          codes = this.$db.get('codes').filter({
-            deletedTime: null
-          }).sortBy('createdTime').cloneDeep().value()
-        } else {
-          codes = this.$db.get('codes').filter({
-            deletedTime: null,
-            username
-          }).sortBy('createdTime').cloneDeep().value()
-        }
+        const codes = user.isAdministrator ? this.$db.data.codes.filter(i => i.deletedTime === null).sort((a, b) => b.createdTime - a.createdTime) : this.$db.data.codes.filter(i => i.deletedTime === null && i.username === username).sort((a, b) => b.createdTime - a.createdTime)
 
         return this.success(codes, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'view-database',
           success: false,
           result: {
@@ -943,7 +932,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -979,22 +970,20 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         if (user.isAdministrator !== true) {
-          const check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.body.uuid,
-            username
-          }).value()
+          const check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.body.uuid &&
+              i.username === username
+          })
 
           if (!check) {
-            this.$db.get('logs').push({
+            this.$db.data.logs.push({
               action: 'delete-database',
               success: false,
               result: {
@@ -1003,19 +992,19 @@ export default [{
                 msg: '没有权限。'
               },
               createdTime: new Date().getTime()
-            }).write()
+            })
 
             return this.fail(null, -11, '没有权限。')
           }
         }
 
-        this.$db.get('codes').find({
-          uuid: request.body.uuid
-        }).assign({
-          deletedTime: new Date().getTime()
-        }).write()
+        const code = this.$db.data.codes.find(i => i.uuid === request.body.uuid)
 
-        this.$db.get('logs').push({
+        Object.assign(code, {
+          deletedTime: new Date().getTime()
+        })
+
+        this.$db.data.logs.push({
           action: 'delete-database',
           success: true,
           result: {
@@ -1023,11 +1012,13 @@ export default [{
             uuid: request.body.uuid
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(null, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'delete-database',
           success: false,
           result: {
@@ -1035,7 +1026,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -1071,29 +1064,27 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         let check = null
-        if (user.isAdministrator === true) {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.query.uuid
-          }).value()
+        if (user.isAdministrator) {
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.query.uuid
+          })
         } else {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.query.uuid,
-            username
-          }).value()
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.query.uuid &&
+              i.username === username
+          })
         }
 
         if (!check) {
-          this.$db.get('logs').push({
+          this.$db.data.logs.push({
             action: 'get-database',
             success: false,
             result: {
@@ -1102,16 +1093,16 @@ export default [{
               msg: '没有权限或没有找到对应的数据库。'
             },
             createdTime: new Date().getTime()
-          }).write()
+          })
+
+          await this.$db.write()
 
           return this.fail(null, -11, '没有权限或没有找到对应的数据库。')
         }
 
-        const db = this.$db.get('databases').find({
-          uuid: request.query.uuid
-        }).value()
+        const db = this.$db.data.databases.find(i => i.uuid === request.query.uuid)
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-database',
           success: true,
           result: {
@@ -1119,11 +1110,13 @@ export default [{
             uuid: request.query.uuid
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(db, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-database',
           success: false,
           result: {
@@ -1131,7 +1124,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -1167,29 +1162,27 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         let check = null
-        if (user.isAdministrator === true) {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            name: request.query.name
-          }).value()
+        if (user.isAdministrator) {
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.name === request.query.name
+          })
         } else {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            name: request.query.name,
-            username
-          }).value()
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.name === request.query.name &&
+              i.username === username
+          })
         }
 
         if (!check) {
-          this.$db.get('logs').push({
+          this.$db.data.logs.push({
             action: 'get-database',
             success: false,
             result: {
@@ -1198,16 +1191,16 @@ export default [{
               msg: '没有权限或没有找到对应的数据库。'
             },
             createdTime: new Date().getTime()
-          }).write()
+          })
+
+          await this.$db.write()
 
           return this.fail(null, -11, '没有权限或没有找到对应的数据库。')
         }
 
-        const db = this.$db.get('databases').find({
-          uuid: check.uuid
-        }).value()
+        const db = this.$db.data.databases.find(i => i.uuid === check.uuid)
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-database',
           success: true,
           result: {
@@ -1215,11 +1208,13 @@ export default [{
             name: request.query.name
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(db, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-database',
           success: false,
           result: {
@@ -1227,7 +1222,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -1263,29 +1260,27 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         let check = null
-        if (user.isAdministrator === true) {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.query.uuid
-          }).value()
+        if (user.isAdministrator) {
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.query.uuid
+          })
         } else {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.query.uuid,
-            username
-          }).value()
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.query.uuid &&
+              i.username === username
+          })
         }
 
         if (!check) {
-          this.$db.get('logs').push({
+          this.$db.data.logs.push({
             action: 'get-exec-log',
             success: false,
             result: {
@@ -1294,16 +1289,16 @@ export default [{
               msg: '没有权限或没有找到对应的数据库。'
             },
             createdTime: new Date().getTime()
-          }).write()
+          })
+
+          await this.$db.write()
 
           return this.fail(null, -11, '没有权限或没有找到对应的数据库。')
         }
 
-        const execLogs = this.$db.get('exec').filter({
-          uuid: check.uuid
-        }).sortBy(item => -item.createdTime).cloneDeep().value()
+        const execLogs = this.$db.data.exec.filter(i => i.uuid === check.uuid).sort((a, b) => b.createdTime - a.createdTime)
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-exec-log',
           success: true,
           result: {
@@ -1311,11 +1306,13 @@ export default [{
             uuid: request.query.uuid
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(execLogs, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-exec-log',
           success: false,
           result: {
@@ -1323,7 +1320,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -1363,30 +1362,28 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         const execUUID = request.query.execUUID
         let check = null
-        if (user.isAdministrator === true) {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.query.uuid
-          }).value()
+        if (user.isAdministrator) {
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.query.uuid
+          })
         } else {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.query.uuid,
-            username
-          }).value()
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.query.uuid &&
+              i.username === username
+          })
         }
 
         if (!check) {
-          this.$db.get('logs').push({
+          this.$db.data.logs.push({
             action: 'get-exec-other-log',
             success: false,
             result: {
@@ -1396,14 +1393,15 @@ export default [{
               msg: '没有权限或没有找到对应的数据库。'
             },
             createdTime: new Date().getTime()
-          }).write()
+          })
+
+          await this.$db.write()
 
           return this.fail(null, -11, '没有权限或没有找到对应的数据库。')
         }
 
-        const execLogs = this.$db.get('logs').filter({
-          execUUID
-        }).cloneDeep().value()
+
+        const execLogs = this.$db.data.exec.filter(i => i.execUUID === execUUID)
 
         for (let n = execLogs.length - 1; n >= 0; n--) {
           if (execLogs[n].result.uuid !== request.query.uuid) {
@@ -1411,7 +1409,7 @@ export default [{
           }
         }
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-exec-other-log',
           success: true,
           result: {
@@ -1420,11 +1418,13 @@ export default [{
             uuid: request.query.uuid
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(execLogs, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-exec-other-log',
           success: false,
           result: {
@@ -1432,7 +1432,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -1472,30 +1474,28 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user) { // 管理员
         const execUUID = request.query.execUUID
         let check = null
-        if (user.isAdministrator === true) {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.query.uuid
-          }).value()
+        if (user.isAdministrator) {
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.query.uuid
+          })
         } else {
-          check = this.$db.get('codes').find({
-            deletedTime: null,
-            uuid: request.query.uuid,
-            username
-          }).value()
+          check = this.$db.data.codes.find(i => {
+            return i.deletedTime === null &&
+              i.uuid === request.query.uuid &&
+              i.username === username
+          })
         }
 
         if (!check) {
-          this.$db.get('logs').push({
+          this.$db.data.logs.push({
             action: 'get-exec-download',
             success: false,
             result: {
@@ -1505,20 +1505,20 @@ export default [{
               msg: '没有权限或没有找到对应的数据库。'
             },
             createdTime: new Date().getTime()
-          }).write()
+          })
+
+          await this.$db.write()
 
           return this.fail(null, -11, '没有权限或没有找到对应的数据库。')
         }
 
-        const exec = this.$db.get('exec').find({
-          execUUID,
-          uuid: request.query.uuid
-        }).cloneDeep().value()
+
+        const exec = this.$db.data.exec.find(i => i.uuid === check.uuid && i.execUUID === execUUID)
 
         const res = await this.$restoreObject(exec.objectName, exec.objectStorageType)
         res.enableSMS = false
 
-        const config = this.$db.get('config').cloneDeep().value()
+        const config = this.$db.data.config
 
         if (config.setting.SMS.enable && typeof config.setting.SMS.enable === "string") {
           const type = config.setting.SMS.enable
@@ -1546,7 +1546,7 @@ export default [{
           }
         }
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-exec-download',
           success: true,
           result: {
@@ -1556,22 +1556,26 @@ export default [{
             res: res
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         if (res.status === 3) {
-          const key = this.$uuid.v4()
-          this.$db.get('download').push({
+          const key = this.$uuid()
+          this.$db.data.download.push({
             key: key,
             objectName: exec.objectName,
             objectStorageType: exec.objectStorageType
-          }).write()
+          })
+
+          await this.$db.write()
 
           res.key = key
         }
 
         return this.success(res, 1)
       } else {
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'get-exec-download',
           success: false,
           result: {
@@ -1579,7 +1583,9 @@ export default [{
             msg: '没有权限。'
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.fail(null, -10, '没有权限。')
       }
@@ -1612,8 +1618,9 @@ export default [{
   },
   async handler (request, reply) {
     try {
+      await this.$db.read()
       const key = request.query.key
-      const exec = this.$db.get('download').find({ key }).cloneDeep().value()
+      const exec = this.$db.data.download.find(i => i.key === key)
       const down = await this.$downloadObject(exec.objectName, exec.objectStorageType)
       const fileName = exec.objectName.split('/').pop()
 
@@ -1652,24 +1659,24 @@ export default [{
       const username = decoded.username
 
       // Find
-      const user = this.$db.get('users')
-        .find({
-          username
-        })
-        .value()
+      await this.$db.read()
+      const user = this.$db.data.users
+        .find(i => i.username === username)
 
       if (user.isAdministrator) { // 管理员
-        this.$db.get('logs').remove().write()
-        this.$db.get('download').remove().write()
+        this.$db.data.logs = []
+        this.$db.data.download = []
 
-        this.$db.get('logs').push({
+        this.$db.data.logs.push({
           action: 'delete-log',
           success: true,
           result: {
             username
           },
           createdTime: new Date().getTime()
-        }).write()
+        })
+
+        await this.$db.write()
 
         return this.success(null, 1)
       } else {

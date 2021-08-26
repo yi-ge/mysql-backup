@@ -8,12 +8,12 @@ import db from '../db.js'
 
 export default async (action, params) => {
   const sendSMS = async (action, params) => {
-    const config = db.get('config').cloneDeep().value()
+    await db.read()
+    const config = db.data.config
 
-    
     if (!config.setting.SMS.enable) return null
     if (typeof config.setting.SMS.enable !== "string") return null
-    
+
     const type = config.setting.SMS.enable
 
     switch (type) {
@@ -46,7 +46,7 @@ export default async (action, params) => {
             smsType: type
           }
         }
-      
+
       default:
         return {
           status: -100,
@@ -57,12 +57,14 @@ export default async (action, params) => {
 
   const result = await sendSMS(action, params)
 
-  db.get('logs').push({
+  db.data.logs.push({
     action: 'sendSMS',
     success: result.status === 1,
     result,
     createdTime: new Date().getTime()
-  }).write()
+  })
+
+  await db.write()
 
   return result
 }

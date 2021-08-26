@@ -33,7 +33,7 @@ const uuid = 'c2d480ea-9ac9-4cf9-afe3-9a5e576a3830';
 
 (async () => {
   const startTime = new Date().getTime()
-  let execUUID = generateUuid.v4()
+  let execUUID = generateUuid()
   const check = db.get('codes').find({
     uuid,
     deletedTime: null
@@ -48,7 +48,7 @@ const uuid = 'c2d480ea-9ac9-4cf9-afe3-9a5e576a3830';
     uuid
   }).cloneDeep().value()
 
-  let dumpToFileName = generateUuid.v4() + (database.compressFile ? '.sql.gz' : '.sql')
+  let dumpToFileName = generateUuid() + (database.compressFile ? '.sql.gz' : '.sql')
   let dumpToFilePath = path.join(__dirname, '../db/', dumpToFileName)
   let result = null
   let oldFilePath = null
@@ -126,7 +126,7 @@ const uuid = 'c2d480ea-9ac9-4cf9-afe3-9a5e576a3830';
       if (database.encryptZipFile && database.zipPassword) {
         oldFilePath = dumpToFilePath
         oldFileName = dumpToFileName
-        dumpToFileName = generateUuid.v4() + '.zip'
+        dumpToFileName = generateUuid() + '.zip'
         dumpToFilePath = path.join(__dirname, '../db/', dumpToFileName)
         const output = fs.createWriteStream(dumpToFilePath)
         const zipEncrypted = () => {
@@ -246,7 +246,7 @@ const uuid = 'c2d480ea-9ac9-4cf9-afe3-9a5e576a3830';
       } else if (typeof database.objectStorage === 'object' && database.objectStorage.length > 0) {
         for (const n in database.objectStorage) {
           if (Number(n) > 0) {
-            execUUID = generateUuid.v4()
+            execUUID = generateUuid()
           }
           uploadJobs.push(upload(objectName, dumpToFilePath, database.objectStorage[n], execUUID))
         }

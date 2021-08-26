@@ -1,49 +1,44 @@
-import low from 'lowdb'
-import path from 'path'
-import uuid from 'uuid'
+import { v4 as uuid } from 'uuid'
 import auth from './auth.js'
-import FileSync from 'lowdb/adapters/FileSync.js'
+import { join, dirname } from 'path'
+import { Low, JSONFile } from 'lowdb'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const SYSTEM_NAME = 'mysql-backup'
 const isDev = process.env.NODE_ENV ? process.env.NODE_ENV === 'development' : false
-const adapter = new FileSync(path.join((isDev ? null : process.env.WORKPATH) || 'db', SYSTEM_NAME + '-db.json'))
-const db = low(adapter)
+// Use JSON file for storage
+const file = join(isDev ? (join(__dirname, '../../db')) : (process.env.WORKPATH || 'db'), SYSTEM_NAME + '-db.json')
+const adapter = new JSONFile(file)
+const db = new Low(adapter)
 
-const initUser = () => {
-  const users = db.get('users').value()
-  if (users.length === 0) {
-    const user = {
-      username: 'admin',
-      password: auth.createPassword('admin888'),
-      token: uuid.v4(),
-      isAdministrator: true,
-      createdTime: new Date().getTime()
-    }
+// Read data from JSON file, this will set db.data content
+await db.read()
 
-    users.push(user)
-    db.set('users', users).write()
-  }
+db.data ||= {
+  config: {},
+  users: [],
+  databases: [],
+  exec: [],
+  codes: [],
+  download: [],
+  logs: []
 }
 
-if (!db.get('config').value()) {
-  db.defaults({
-    config: {},
-    users: [],
-    databases: [],
-    exec: [],
-    codes: [],
-    download: [],
-    logs: []
-  }).write()
-}
+if (!db.data.users || db.data.users.length === 0) db.data.users = [{
+  username: 'admin',
+  password: auth.createPassword('admin888'),
+  token: uuid(),
+  isAdministrator: true,
+  createdTime: new Date().getTime()
+}]
+if (!db.data.databases) db.data.databases = []
+if (!db.data.exec) db.data.exec = []
+if (!db.data.codes) db.data.codes = []
+if (!db.data.download) db.data.download = []
+if (!db.data.logs) db.data.logs = []
 
-if (!db.get('users').value()) db.set('users', []).write()
-if (!db.get('databases').value()) db.set('databases', []).write()
-if (!db.get('exec').value()) db.set('exec', []).write()
-if (!db.get('codes').value()) db.set('codes', []).write()
-if (!db.get('download').value()) db.set('download', []).write()
-if (!db.get('logs').value()) db.set('logs', []).write()
-
-initUser()
+await db.write()
 
 export default db

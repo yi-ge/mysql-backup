@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import generateUuid from 'uuid'
+import { v4 as generateUUID } from 'uuid'
 import archiver from 'archiver'
 import archiverZipEncrypted from 'archiver-zip-encrypted'
 import mysqldump from 'mysqldump'
@@ -38,40 +38,32 @@ export default (db, log) => {
 
   const dbs = new Map()
   try {
-    schedule.scheduleJob('* * * * *', function () {
-      const databases = db.get('databases').cloneDeep().value()
+    schedule.scheduleJob('* * * * *', async function () {
+      await db.read()
+      const databases = db.data.databases
 
       for (const n in databases) {
         if (!dbs.has(databases[n].uuid) || (dbs.has(databases[n].uuid) && dbs.get(databases[n].uuid).cron !== databases[n].cron)) {
           const uuid = databases[n].uuid
-          const check = db.get('codes').find({
-            uuid,
-            deletedTime: null
-          }).cloneDeep().value()
-
-          if (!check) {
+          if (!db.data.codes.find(item => item.uuid === uuid && !item.deletedTime)) {
             return
           }
 
+          // 每个数据库里面的任务
           const job = schedule.scheduleJob(databases[n].cron, async () => {
             let success = false
+            let execUUID = generateUUID()
             const name = databases[n].name
             const startTime = new Date().getTime()
-            let execUUID = generateUuid.v4()
-            const check = db.get('codes').find({
-              uuid,
-              deletedTime: null
-            }).cloneDeep().value()
 
-            if (!check) {
+            await db.read()
+            if (!db.data.codes.find(item => item.uuid === uuid && !item.deletedTime)) {
               return
             }
 
-            const database = db.get('databases').find({
-              uuid
-            }).cloneDeep().value()
+            const database = db.data.databases.find(i => i.uuid === uuid)
 
-            let dumpToFileName = generateUuid.v4() + '.sql'
+            let dumpToFileName = generateUUID() + '.sql'
             let dumpToFilePath = path.join(__dirname, '../db/', dumpToFileName)
             let fileSize = 0
             let result = null
@@ -95,7 +87,7 @@ export default (db, log) => {
 
               dumpTime = new Date().getTime()
             } catch (err) {
-              db.get('exec').push({
+              db.data.exec.push({
                 execUUID,
                 uuid,
                 success: false,
@@ -107,7 +99,9 @@ export default (db, log) => {
                 tables: null,
                 fileSize,
                 createdTime: new Date().getTime()
-              }).write()
+              })
+
+              await db.write()
 
               if (!success) {
                 log.debug('发送失败短信')
@@ -117,14 +111,13 @@ export default (db, log) => {
                 })
               }
 
-              db.get('codes').find({
-                uuid
-              }).assign({
+              const code = db.data.codes.find(i => i.uuid === uuid)
+              Object.assign(code, {
                 lastExecTime: startTime,
                 updatedTime: new Date().getTime()
-              }).write()
+              })
 
-              db.get('logs').push({
+              db.data.logs.push({
                 action: 'create-mysqldump',
                 success: false,
                 execUUID,
@@ -135,11 +128,12 @@ export default (db, log) => {
                   msg: '备份异常，请检查配置数据'
                 },
                 createdTime: new Date().getTime()
-              }).write()
+              })
+              await db.write()
 
-              fs.unlink(dumpToFilePath, (err) => {
+              fs.unlink(dumpToFilePath, async (err) => {
                 if (err) {
-                  db.get('logs').push({
+                  db.data.logs.push({
                     action: 'del-oldFile',
                     success: false,
                     execUUID,
@@ -149,7 +143,8 @@ export default (db, log) => {
                       err
                     },
                     createdTime: new Date().getTime()
-                  }).write()
+                  })
+                  await db.write()
                 }
               })
 
@@ -162,7 +157,7 @@ export default (db, log) => {
                 if (database.encryptZipFile && database.zipPassword) {
                   oldFilePath = dumpToFilePath
                   oldFileName = dumpToFileName
-                  dumpToFileName = generateUuid.v4() + '.zip'
+                  dumpToFileName = generateUUID() + '.zip'
                   dumpToFilePath = path.join(__dirname, '../db/', dumpToFileName)
                   const output = fs.createWriteStream(dumpToFilePath)
                   const zipEncrypted = () => {
@@ -201,9 +196,9 @@ export default (db, log) => {
                   fileSize = await zipEncrypted()
 
                   if (oldFilePath) {
-                    fs.unlink(oldFilePath, (err) => {
+                    fs.unlink(oldFilePath, async (err) => {
                       if (err) {
-                        db.get('logs').push({
+                        db.data.logs.push({
                           action: 'del-oldFile',
                           success: false,
                           execUUID,
@@ -213,7 +208,8 @@ export default (db, log) => {
                             err
                           },
                           createdTime: new Date().getTime()
-                        }).write()
+                        })
+                        await db.write()
                       }
                     })
                   }
@@ -228,7 +224,7 @@ export default (db, log) => {
                 const uploadJobs = []
 
                 if (!database.objectStorage || (typeof database.objectStorage === 'string' && database.objectStorage === '')) {
-                  db.get('exec').push({
+                  db.data.exec.push({
                     execUUID,
                     uuid,
                     success: false,
@@ -240,7 +236,9 @@ export default (db, log) => {
                     tables: result.tables.length,
                     fileSize,
                     createdTime: new Date().getTime()
-                  }).write()
+                  })
+
+                  await db.write()
 
                   if (!success) {
                     log.debug('发送失败短信')
@@ -250,14 +248,13 @@ export default (db, log) => {
                     })
                   }
 
-                  db.get('codes').find({
-                    uuid
-                  }).assign({
+                  const code = db.data.codes.find(i => i.uuid === uuid)
+                  Object.assign(code, {
                     lastExecTime: startTime,
                     updatedTime: new Date().getTime()
-                  }).write()
+                  })
 
-                  db.get('logs').push({
+                  db.data.logs.push({
                     action: 'upload-backup',
                     success: false,
                     execUUID,
@@ -267,11 +264,13 @@ export default (db, log) => {
                       msg: 'objectStorage字段异常，请检查配置数据。'
                     },
                     createdTime: new Date().getTime()
-                  }).write()
+                  })
 
-                  fs.unlink(dumpToFilePath, (err) => {
+                  await db.write()
+
+                  fs.unlink(dumpToFilePath, async (err) => {
                     if (err) {
-                      db.get('logs').push({
+                      db.data.logs.push({
                         action: 'del-oldFile',
                         success: false,
                         execUUID,
@@ -281,7 +280,9 @@ export default (db, log) => {
                           err
                         },
                         createdTime: new Date().getTime()
-                      }).write()
+                      })
+
+                      await db.write()
                     }
                   })
 
@@ -291,7 +292,7 @@ export default (db, log) => {
                 } else if (typeof database.objectStorage === 'object' && database.objectStorage.length > 0) {
                   for (const n in database.objectStorage) {
                     if (Number(n) > 0) {
-                      execUUID = generateUuid.v4()
+                      execUUID = generateUUID()
                     }
                     uploadJobs.push(upload(objectName, dumpToFilePath, database.objectStorage[n], execUUID))
                   }
@@ -300,14 +301,14 @@ export default (db, log) => {
                 let jobTime = uploadJobs.length
 
                 for (const n in uploadJobs) {
-                  uploadJobs[n].then(res => {
+                  uploadJobs[n].then(async res => {
                     jobTime--
                     if (res.objectName) {
                       // 写入日志
                       const createdTime = new Date().getTime()
 
                       success = true
-                      db.get('exec').push({
+                      db.data.exec.push({
                         name,
                         execUUID: res.execUUID,
                         uuid,
@@ -320,7 +321,8 @@ export default (db, log) => {
                         tables: result.tables.length,
                         fileSize,
                         createdTime,
-                      }).write()
+                      })
+                      await db.write()
 
                       log.debug('发送成功短信')
                       sendSMS('success', {
@@ -334,14 +336,14 @@ export default (db, log) => {
                         jobTime: String((createdTime - startTime) / 1000)
                       })
 
-                      db.get('codes').find({
-                        uuid
-                      }).assign({
+                      const code = db.data.codes.find(i => i.uuid === uuid)
+                      Object.assign(code, {
                         lastExecTime: startTime,
                         updatedTime: new Date().getTime()
-                      }).write()
+                      })
+                      await db.write()
                     } else {
-                      db.get('exec').push({
+                      db.data.exec.push({
                         execUUID: res.execUUID,
                         uuid,
                         success: false,
@@ -353,7 +355,8 @@ export default (db, log) => {
                         tables: result.tables.length,
                         fileSize,
                         createdTime: new Date().getTime()
-                      }).write()
+                      })
+                      await db.write()
 
                       if (!success) {
                         log.debug('发送失败短信')
@@ -363,14 +366,14 @@ export default (db, log) => {
                         })
                       }
 
-                      db.get('codes').find({
-                        uuid
-                      }).assign({
+                      const code = db.data.codes.find(i => i.uuid === uuid)
+                      Object.assign(code, {
                         lastExecTime: startTime,
                         updatedTime: new Date().getTime()
-                      }).write()
+                      })
+                      await db.write()
 
-                      db.get('logs').push({
+                      db.data.logs.push({
                         action: 'upload-backup',
                         success: false,
                         execUUID: res.execUUID,
@@ -380,11 +383,12 @@ export default (db, log) => {
                           msg: '上传备份异常，请检查对象存储配置或服务器网络。（重点检查是否开启了对应的对象存储）'
                         },
                         createdTime: new Date().getTime()
-                      }).write()
+                      })
+                      await db.write()
                     }
-                  }).catch(err => {
+                  }).catch(async err => {
                     jobTime--
-                    db.get('exec').push({
+                    db.data.exec.push({
                       execUUID,
                       uuid,
                       success: false,
@@ -396,7 +400,8 @@ export default (db, log) => {
                       tables: result.tables.length,
                       fileSize,
                       createdTime: new Date().getTime()
-                    }).write()
+                    })
+                    await db.write()
 
                     if (!success) {
                       log.debug('发送失败短信')
@@ -406,14 +411,14 @@ export default (db, log) => {
                       })
                     }
 
-                    db.get('codes').find({
-                      uuid
-                    }).assign({
+                    const code = db.data.codes.find(i => i.uuid === uuid)
+                    Object.assign(code, {
                       lastExecTime: startTime,
                       updatedTime: new Date().getTime()
-                    }).write()
+                    })
+                    await db.write()
 
-                    db.get('logs').push({
+                    db.data.logs.push({
                       action: 'upload-backup',
                       success: false,
                       execUUID,
@@ -424,7 +429,8 @@ export default (db, log) => {
                         msg: '上传备份异常，请检查对象存储配置或服务器网络。'
                       },
                       createdTime: new Date().getTime()
-                    }).write()
+                    })
+                    await db.write()
                   })
                 }
 
@@ -432,9 +438,9 @@ export default (db, log) => {
                   setTimeout(() => {
                     if (jobTime <= 0) {
                       if (dumpToFilePath) {
-                        fs.unlink(dumpToFilePath, (err) => {
+                        fs.unlink(dumpToFilePath, async (err) => {
                           if (err) {
-                            db.get('logs').push({
+                            db.data.logs.push({
                               action: 'del-oldFile',
                               success: false,
                               execUUID,
@@ -444,7 +450,8 @@ export default (db, log) => {
                                 err
                               },
                               createdTime: new Date().getTime()
-                            }).write()
+                            })
+                            await db.write()
                           }
                         })
                       }
@@ -456,7 +463,7 @@ export default (db, log) => {
 
                 delOldFile()
               } else {
-                db.get('exec').push({
+                db.data.exec.push({
                   execUUID,
                   uuid,
                   success: false,
@@ -468,7 +475,8 @@ export default (db, log) => {
                   tables: result.tables.length,
                   fileSize,
                   createdTime: new Date().getTime()
-                }).write()
+                })
+                await db.write()
 
                 if (!success) {
                   log.debug('发送失败短信')
@@ -478,14 +486,13 @@ export default (db, log) => {
                   })
                 }
 
-                db.get('codes').find({
-                  uuid
-                }).assign({
+                const code = db.data.codes.find(i => i.uuid === uuid)
+                Object.assign(code, {
                   lastExecTime: startTime,
                   updatedTime: new Date().getTime()
-                }).write()
+                })
 
-                db.get('logs').push({
+                db.data.logs.push({
                   action: 'create-mysqldump',
                   success: false,
                   execUUID,
@@ -495,11 +502,13 @@ export default (db, log) => {
                     msg: '备份异常，请检查数据库连接'
                   },
                   createdTime: new Date().getTime()
-                }).write()
+                })
 
-                fs.unlink(dumpToFilePath, (err) => {
+                await db.write()
+
+                fs.unlink(dumpToFilePath, async (err) => {
                   if (err) {
-                    db.get('logs').push({
+                    db.data.logs.push({
                       action: 'del-oldFile',
                       success: false,
                       execUUID,
@@ -509,12 +518,14 @@ export default (db, log) => {
                         err
                       },
                       createdTime: new Date().getTime()
-                    }).write()
+                    })
+
+                    await db.write()
                   }
                 })
               }
             } catch (err) {
-              db.get('exec').push({
+              db.data.exec.push({
                 execUUID,
                 uuid,
                 success: false,
@@ -526,7 +537,8 @@ export default (db, log) => {
                 tables: result.tables.length,
                 fileSize,
                 createdTime: new Date().getTime()
-              }).write()
+              })
+              await db.write()
 
               if (!success) {
                 log.debug('发送失败短信')
@@ -536,14 +548,13 @@ export default (db, log) => {
                 })
               }
 
-              db.get('codes').find({
-                uuid
-              }).assign({
+              db.data.codes.find(i => i.uuid === uuid).assign({
                 lastExecTime: startTime,
                 updatedTime: new Date().getTime()
-              }).write()
+              })
+              await db.write()
 
-              db.get('logs').push({
+              db.data.logs.push({
                 action: 'zip-encrypted',
                 success: false,
                 execUUID,
@@ -554,11 +565,12 @@ export default (db, log) => {
                   msg: '压缩异常，请检查压缩配置'
                 },
                 createdTime: new Date().getTime()
-              }).write()
+              })
+              await db.write()
 
-              fs.unlink(dumpToFilePath, (err) => {
+              fs.unlink(dumpToFilePath, async (err) => {
                 if (err) {
-                  db.get('logs').push({
+                  db.data.logs.push({
                     action: 'del-oldFile',
                     success: false,
                     execUUID,
@@ -568,14 +580,16 @@ export default (db, log) => {
                       err
                     },
                     createdTime: new Date().getTime()
-                  }).write()
+                  })
+
+                  await db.write()
                 }
               })
 
               if (oldFilePath) {
-                fs.unlink(oldFilePath, (err) => {
+                fs.unlink(oldFilePath, async (err) => {
                   if (err) {
-                    db.get('logs').push({
+                    db.data.logs.push({
                       action: 'del-oldFile',
                       success: false,
                       execUUID,
@@ -585,7 +599,9 @@ export default (db, log) => {
                         err
                       },
                       createdTime: new Date().getTime()
-                    }).write()
+                    })
+
+                    await db.write()
                   }
                 })
               }

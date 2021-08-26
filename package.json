@@ -1,6 +1,6 @@
 {
   "name": "mysql-backup",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Automatically get your mysql database backup and uploading it to the Object Storage.",
   "main": "src/main.js",
   "scripts": {

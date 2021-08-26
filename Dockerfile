@@ -1,23 +1,16 @@
-FROM node:16.7.0-alpine
+FROM node:latest
 LABEL AUTHOR="yi-ge"
 LABEL maintainer="a@wyr.me"
 
-RUN apk add --no-cache \
-  libstdc++ \
-  libgcc \
-  openssh-client \
-  bash \
-  ca-certificates \
-  zlib \
-  git
+RUN apt install gcc g++ make
 
-WORKDIR /usr/src/app
+RUN mkdir /project
 
-COPY package*.json ./
+ADD . /project
 
-RUN npm install
+WORKDIR /project
 
-COPY . .
+RUN yarn
 
 EXPOSE 80
 

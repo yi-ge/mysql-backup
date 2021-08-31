@@ -789,9 +789,9 @@ export default [{
 
           Object.assign(database, res)
 
-          const code = this.$db.data.codes.find(i => i.uuid === uuid)
+          const codeObj = this.$db.data.codes.find(i => i.uuid === uuid)
 
-          Object.assign(code, {
+          Object.assign(codeObj, {
             username,
             code,
             uuid: res.uuid,

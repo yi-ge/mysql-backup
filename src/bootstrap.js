@@ -38,7 +38,10 @@ export default (db, log) => {
 
   const dbs = new Map()
   try {
-    schedule.scheduleJob('* * * * *', async function () {
+    schedule.scheduleJob({
+      rule: '* * * * *',
+      tz: 'Asia/Shanghai'
+    }, async function () {
       await db.read()
       const databases = db.data.databases
 
@@ -50,7 +53,10 @@ export default (db, log) => {
           }
 
           // 每个数据库里面的任务
-          const job = schedule.scheduleJob(databases[n].cron, async () => {
+          const job = schedule.scheduleJob({
+            rule: databases[n].cron,
+            tz: 'Asia/Shanghai'
+          }, async () => {
             let success = false
             let execUUID = generateUUID()
             const name = databases[n].name
@@ -322,6 +328,12 @@ export default (db, log) => {
                         fileSize,
                         createdTime,
                       })
+
+                      const code = db.data.codes.find(i => i.uuid === uuid)
+                      Object.assign(code, {
+                        lastExecTime: startTime,
+                        updatedTime: new Date().getTime()
+                      })
                       await db.write()
 
                       log.debug('发送成功短信')
@@ -335,13 +347,6 @@ export default (db, log) => {
                         uploadTime: String((createdTime - dumpTime) / 1000),
                         jobTime: String((createdTime - startTime) / 1000)
                       })
-
-                      const code = db.data.codes.find(i => i.uuid === uuid)
-                      Object.assign(code, {
-                        lastExecTime: startTime,
-                        updatedTime: new Date().getTime()
-                      })
-                      await db.write()
                     } else {
                       db.data.exec.push({
                         execUUID: res.execUUID,

@@ -1404,7 +1404,7 @@ export default [{
         const execLogs = this.$db.data.exec.filter(i => i.execUUID === execUUID)
 
         for (let n = execLogs.length - 1; n >= 0; n--) {
-          if (execLogs[n].result.uuid !== request.query.uuid) {
+          if (execLogs[n].uuid !== request.query.uuid) {
             execLogs.splice(n, 1)
           }
         }
@@ -1439,6 +1439,7 @@ export default [{
         return this.fail(null, -10, '没有权限。')
       }
     } catch (err) {
+      console.log(err)
       return this.fail(null, 403, '认证失败。')
     }
   }

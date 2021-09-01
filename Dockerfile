@@ -1,8 +1,6 @@
-FROM node:latest
+FROM node:16.8
 LABEL AUTHOR="yi-ge"
 LABEL maintainer="a@wyr.me"
-
-RUN apt install gcc g++ make
 
 RUN mkdir /project
 

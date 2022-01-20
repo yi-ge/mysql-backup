@@ -43,7 +43,7 @@
     "mysql2": "^2.3.0",
     "mysqldump": "^3.2.0",
     "node-schedule": "^2.0.0",
-    "pino-pretty": "^6.0.0",
+    "pino-pretty": "^7.4.0",
     "qcloudsms_js": "^0.1.1",
     "qiniu": "https://github.com/yi-ge/nodejs-sdk",
     "request": "^2.88.2",

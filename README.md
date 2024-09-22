@@ -9,7 +9,7 @@ Automatically get your mysql database backup and uploading it to the Object Stor
 
 自动获取 MySQL 数据库备份文件并将其上传到对象存储。
 
-Demo: [https://mysql-backup.demo.wyr.me](https://mysql-backup.demo.wyr.me)
+Demo: [https://mysql-backup-demo.wyr.me](https://mysql-backup-demo.wyr.me)
 
 默认超级管理员
 
@@ -102,7 +102,7 @@ docker run -itd --name mysql-backup --restart always \
 
 **Swagger:** <https://yourdomain/documentation>
 
-**在线文档:** <https://mysql-backup.demo.wyr.me/documentation>
+**在线文档:** <https://mysql-backup-demo.wyr.me/documentation>
 
 ## 支持的对象存储
 

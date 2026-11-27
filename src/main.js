@@ -1,14 +1,12 @@
-import {
-  fileURLToPath
-} from 'url'
 import fs from 'fs'
 import path from 'path'
+import { randomUUID as uuid } from 'node:crypto'
 import Fastify from 'fastify'
-import FastifyStatic from 'fastify-static'
-import FastifySwagger from 'fastify-swagger'
-import FastifyJWT from 'fastify-jwt'
-import FastifyCORS from 'fastify-cors'
-import { v4 as uuid } from 'uuid'
+import FastifyStatic from '@fastify/static'
+import FastifySwagger from '@fastify/swagger'
+import FastifySwaggerUI from '@fastify/swagger-ui'
+import FastifyJWT from '@fastify/jwt'
+import FastifyCORS from '@fastify/cors'
 import dayjs from 'dayjs'
 import db from './lib/db.js'
 import auth from './lib/auth.js'
@@ -20,21 +18,7 @@ import { deepClone } from './lib/tool.js'
 
 const isDev = process.env.NODE_ENV ? process.env.NODE_ENV === 'development' : false
 
-if (typeof (__filename) === 'undefined') {
-  try {
-    // eslint-disable-next-line
-    global.__filename = fileURLToPath(
-      import.meta.url)
-  } catch (err) {
-    console.error(err)
-  }
-}
-
-if (typeof (__dirname) === 'undefined') {
-  global.__dirname = path.dirname(__filename)
-}
-
-const initConfig = async (config) => {
+const initConfig = (config) => {
   if (config.sessionKeyCreateTime && new Date().getTime() - config.sessionKeyCreateTime > 28 * 24 * 3600 * 1000) {
     config.sessionKey = null
     config.sessionKeyCreateTime = null
@@ -43,14 +27,14 @@ const initConfig = async (config) => {
   if (!config.sessionKey) config.sessionKey = uuid().split('-').join('')
   if (!config.sessionKeyCreateTime) config.sessionKeyCreateTime = new Date().getTime()
   if (!config.setting) {
-    let template = fs.readFileSync(path.join(__dirname, 'template', 'setting.json'), 'utf-8')
+    const template = fs.readFileSync(path.join(import.meta.dirname, 'template', 'setting.json'), 'utf-8')
     config.setting = JSON.parse(template)
   }
 
   return config
 }
 
-let config = await initConfig(db.data.config)
+const config = initConfig(db.data.config)
 db.data.config = config
 await db.write()
 
@@ -68,7 +52,7 @@ export const SERVER = {
 const fastify = Fastify({
   logger: {
     level: isDev ? 'debug' : 'warn',
-    prettyPrint: true
+    transport: { target: 'pino-pretty' }
   }
 })
 
@@ -103,13 +87,7 @@ Object.assign(fastify, {
   }
 })
 
-fastify.register(FastifyStatic, {
-  root: path.join(__dirname, 'ui')
-})
-
-fastify.register(FastifySwagger, {
-  exposeRoute: true,
-  routePrefix: '/documentation',
+await fastify.register(FastifySwagger, {
   swagger: {
     info: {
       title: 'API Documentation',
@@ -120,7 +98,6 @@ fastify.register(FastifySwagger, {
       url: 'https://swagger.io',
       description: 'Find more info here'
     },
-    host: SYSTEM.HOST,
     schemes: SYSTEM.SCHEME,
     consumes: ['application/json'],
     produces: ['application/json'],
@@ -144,6 +121,12 @@ fastify.register(FastifySwagger, {
   }
 })
 
+fastify.register(FastifyStatic, {
+  root: path.join(import.meta.dirname, 'ui')
+})
+
+fastify.register(FastifySwaggerUI, { routePrefix: '/documentation' })
+
 fastify.register(FastifyJWT, {
   secret: SYSTEM.sessionKey,
   sign: {
@@ -153,17 +136,9 @@ fastify.register(FastifyJWT, {
 
 fastify.register(FastifyCORS)
 
-services.map(item => fastify.route(item))
+for (const route of services) fastify.route(route)
 
-fastify.ready(err => {
-  if (err) throw err
-  fastify.swagger()
-})
-
-fastify.listen(SERVER.port, SERVER.host, (err, address) => {
-  if (err) throw err
-  fastify.log.warn(`Server listening on ${address}`)
-  fastify.log.debug(`Run in DEV mode.`)
-})
-
+const address = await fastify.listen({ port: Number(SERVER.port), host: SERVER.host })
+fastify.log.warn(`Server listening on ${address}`)
+if (isDev) fastify.log.debug('Run in DEV mode.')
 bootstrap(db, fastify.log)

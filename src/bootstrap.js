@@ -1,9 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import { pipeline } from 'stream/promises'
-import { v4 as generateUUID } from 'uuid'
-import archiver from 'archiver'
-import archiverZipEncrypted from 'archiver-zip-encrypted'
+import { randomUUID as generateUUID } from 'node:crypto'
+import { ZipWriterStream } from '@zip.js/zip.js'
 import mysqldump from 'mysqldump'
 import schedule from 'node-schedule'
 import upload from './lib/object-storage/upload.js'
@@ -11,10 +10,6 @@ import sendSMS from './lib/sms/index.js'
 import dayjs from 'dayjs'
 import { workPath } from './lib/db.js'
 import { backupConnection } from './lib/mysql.js'
-
-// register format for archiver
-// note: only do it once per Node.js process/application, as duplicate registration will throw an error
-archiver.registerFormat('zip-encrypted', archiverZipEncrypted)
 
 const getObjectStorageType = (value) => {
   switch (value) {
@@ -80,7 +75,6 @@ export default (db, log) => {
             let fileSize = 0
             let result = null
             let oldFilePath = null
-            let oldFileName = null
             let dumpTime = null
 
             try {
@@ -167,28 +161,22 @@ export default (db, log) => {
               if (result.tables) {
                 // create a file to stream archive data to.
                 if (database.encryptZipFile) {
-                  if (!database.zipPassword) throw new Error('zipPassword is required when encryptZipFile is enabled')
+                  if (typeof database.zipPassword !== 'string' || database.zipPassword.length === 0) {
+                    throw new Error('zipPassword is required when encryptZipFile is enabled')
+                  }
 
                   oldFilePath = dumpToFilePath
-                  oldFileName = dumpToFileName
+                  const oldFileName = dumpToFileName
                   dumpToFileName = generateUUID() + '.zip'
                   dumpToFilePath = path.join(workPath, dumpToFileName)
-                  const archive = archiver.create('zip-encrypted', {
-                    zlib: { level: 8 },
-                    encryptionMethod: 'aes256',
+                  const archive = new ZipWriterStream({
+                    level: 8,
+                    encryptionStrength: 3,
                     password: database.zipPassword
                   })
-                  const output = pipeline(archive, fs.createWriteStream(dumpToFilePath))
-                  archive.on('warning', err => archive.destroy(err))
-                  archive.file(oldFilePath, { name: oldFileName })
-                  try {
-                    await Promise.all([output, archive.finalize()])
-                  } catch (err) {
-                    archive.destroy(err)
-                    await output.catch(() => {})
-                    throw err
-                  }
-                  fileSize = archive.pointer()
+                  const output = fs.createWriteStream(dumpToFilePath)
+                  await pipeline(fs.createReadStream(oldFilePath), archive.transform(oldFileName), output)
+                  fileSize = output.bytesWritten
 
                   if (oldFilePath) {
                     fs.unlink(oldFilePath, async (err) => {

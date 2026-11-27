@@ -558,7 +558,7 @@ export default [{
         .find(i => i.username === username)
 
       if (user) {
-        let template = fs.readFileSync(path.join(__dirname, 'template', 'mysql.js'), 'utf-8')
+        let template = fs.readFileSync(path.join(import.meta.dirname, 'template', 'mysql.js'), 'utf-8')
 
         template = template.replace(/uuid: '(.*)'/i, 'uuid: \'' + this.$uuid() + '\'')
 
@@ -1635,8 +1635,7 @@ export default [{
         'Content-Disposition': `attachment; filename="${fileName}"`
       })
 
-      reply.send(down.outputStream)
-      return
+      return reply.send(down.outputStream)
     } catch (err) {
       console.log(err)
       return this.fail(null, -12, '下载文件请求异常。')

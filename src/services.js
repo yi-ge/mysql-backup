@@ -3,6 +3,7 @@ import path from 'path'
 import vm from 'vm'
 import mysql from 'mysql2/promise.js'
 import sendSMS from './lib/sms/index.js'
+import { backupConnection } from './lib/mysql.js'
 
 const verify = (request) => {
   return new Promise((resolve, reject) => {
@@ -616,28 +617,27 @@ export default [{
         }
 
         // create the connection
-        let error = null
-        let connection = null
+        let connecting
         try {
-          connection = await mysql.createConnection(res.connection).catch(err => {
-            error = err
-            if (err) reply.send(this.fail(err.toString(), -13, '连接失败'))
-          })
+          connecting = mysql.createConnection(backupConnection(res.connection))
         } catch (err) {
           return this.fail(err.toString(), -12, '连接失败')
         }
 
+        let connection
         try {
-          if (!error) {
-            // query database
-            const [rows] = await connection.execute('SHOW TABLES')
+          connection = await connecting
+        } catch (err) {
+          return this.fail(err.toString(), -13, '连接失败')
+        }
 
-            return this.success(rows, 1, '连接成功')
-          } else {
-            return this.fail(error.toString(), -13, '连接失败')
-          }
+        try {
+          const [rows] = await connection.execute('SHOW TABLES')
+          return this.success(rows, 1, '连接成功')
         } catch (err) {
           return this.fail(err.toString(), -14, '权限不足')
+        } finally {
+          await connection.end().catch(() => connection.destroy())
         }
       } else {
         return this.fail(null, -10, '没有权限。')

@@ -56,6 +56,7 @@ export default async (action, params) => {
   }
 
   const result = await sendSMS(action, params)
+  if (!result) return null
 
   db.data.logs.push({
     action: 'sendSMS',

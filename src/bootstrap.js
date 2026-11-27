@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { pipeline } from 'stream/promises'
 import { v4 as generateUUID } from 'uuid'
 import archiver from 'archiver'
 import archiverZipEncrypted from 'archiver-zip-encrypted'
@@ -8,6 +9,8 @@ import schedule from 'node-schedule'
 import upload from './lib/object-storage/upload.js'
 import sendSMS from './lib/sms/index.js'
 import dayjs from 'dayjs'
+import { workPath } from './lib/db.js'
+import { backupConnection } from './lib/mysql.js'
 
 // register format for archiver
 // note: only do it once per Node.js process/application, as duplicate registration will throw an error
@@ -45,21 +48,24 @@ export default (db, log) => {
       await db.read()
       const databases = db.data.databases
 
-      for (const n in databases) {
-        if (!dbs.has(databases[n].uuid) || (dbs.has(databases[n].uuid) && dbs.get(databases[n].uuid).cron !== databases[n].cron)) {
-          const uuid = databases[n].uuid
-          if (!db.data.codes.find(item => item.uuid === uuid && !item.deletedTime)) {
-            return
+      for (const { uuid, cron, name } of databases) {
+        const previous = dbs.get(uuid)
+        if (!db.data.codes.some(item => item.uuid === uuid && !item.deletedTime)) {
+          if (previous) {
+            previous.job.cancel()
+            dbs.delete(uuid)
           }
+          continue
+        }
 
+        if (!previous || previous.cron !== cron) {
           // 每个数据库里面的任务
           const job = schedule.scheduleJob({
-            rule: databases[n].cron,
+            rule: cron,
             tz: 'Asia/Shanghai'
           }, async () => {
             let success = false
             let execUUID = generateUUID()
-            const name = databases[n].name
             const startTime = new Date().getTime()
 
             await db.read()
@@ -70,7 +76,7 @@ export default (db, log) => {
             const database = db.data.databases.find(i => i.uuid === uuid)
 
             let dumpToFileName = generateUUID() + '.sql'
-            let dumpToFilePath = path.join(__dirname, '../db/', dumpToFileName)
+            let dumpToFilePath = path.join(workPath, dumpToFileName)
             let fileSize = 0
             let result = null
             let oldFilePath = null
@@ -79,7 +85,7 @@ export default (db, log) => {
 
             try {
               result = await mysqldump({
-                connection: database.connection,
+                connection: backupConnection(database.connection),
                 dump: {
                   tables: database.dumpOptions.tables,
                   excludeTables: database.dumpOptions.excludeTables
@@ -138,7 +144,7 @@ export default (db, log) => {
               await db.write()
 
               fs.unlink(dumpToFilePath, async (err) => {
-                if (err) {
+                if (err && err.code !== 'ENOENT') {
                   db.data.logs.push({
                     action: 'del-oldFile',
                     success: false,
@@ -160,46 +166,29 @@ export default (db, log) => {
             try {
               if (result.tables) {
                 // create a file to stream archive data to.
-                if (database.encryptZipFile && database.zipPassword) {
+                if (database.encryptZipFile) {
+                  if (!database.zipPassword) throw new Error('zipPassword is required when encryptZipFile is enabled')
+
                   oldFilePath = dumpToFilePath
                   oldFileName = dumpToFileName
                   dumpToFileName = generateUUID() + '.zip'
-                  dumpToFilePath = path.join(__dirname, '../db/', dumpToFileName)
-                  const output = fs.createWriteStream(dumpToFilePath)
-                  const zipEncrypted = () => {
-                    return new Promise((resolve, reject) => {
-                      // create archive and specify method of encryption and password
-                      const archive = archiver.create('zip-encrypted', {
-                        zlib: {
-                          level: 8
-                        },
-                        encryptionMethod: 'aes256',
-                        password: database.zipPassword
-                      })
-
-                      // listen for all archive data to be written
-                      // 'close' event is fired only when a file descriptor is involved
-                      output.on('close', function () {
-                        resolve(archive.pointer()) // total bytes
-                      })
-
-                      // good practice to catch this error explicitly
-                      archive.on('error', function (err) {
-                        return reject(err)
-                      })
-
-                      // pipe archive data to the file
-                      archive.pipe(output)
-
-                      archive.append(fs.createReadStream(oldFilePath), {
-                        name: oldFileName
-                      })
-
-                      archive.finalize()
-                    })
+                  dumpToFilePath = path.join(workPath, dumpToFileName)
+                  const archive = archiver.create('zip-encrypted', {
+                    zlib: { level: 8 },
+                    encryptionMethod: 'aes256',
+                    password: database.zipPassword
+                  })
+                  const output = pipeline(archive, fs.createWriteStream(dumpToFilePath))
+                  archive.on('warning', err => archive.destroy(err))
+                  archive.file(oldFilePath, { name: oldFileName })
+                  try {
+                    await Promise.all([output, archive.finalize()])
+                  } catch (err) {
+                    archive.destroy(err)
+                    await output.catch(() => {})
+                    throw err
                   }
-
-                  fileSize = await zipEncrypted()
+                  fileSize = archive.pointer()
 
                   if (oldFilePath) {
                     fs.unlink(oldFilePath, async (err) => {
@@ -229,7 +218,8 @@ export default (db, log) => {
                 const objectName = '/mysql-backup/' + date.getFullYear() + '/' + MM + '/' + DD + '/' + dumpToFileName
                 const uploadJobs = []
 
-                if (!database.objectStorage || (typeof database.objectStorage === 'string' && database.objectStorage === '')) {
+                const storage = database.objectStorage
+                if (!(typeof storage === 'string' && storage.length) && !(Array.isArray(storage) && storage.length)) {
                   db.data.exec.push({
                     execUUID,
                     uuid,
@@ -293,14 +283,14 @@ export default (db, log) => {
                   })
 
                   return
-                } else if (typeof database.objectStorage === 'string' && database.objectStorage.length > 0) {
-                  uploadJobs.push(upload(objectName, dumpToFilePath, database.objectStorage, execUUID))
-                } else if (typeof database.objectStorage === 'object' && database.objectStorage.length > 0) {
-                  for (const n in database.objectStorage) {
+                } else if (typeof storage === 'string') {
+                  uploadJobs.push(upload(objectName, dumpToFilePath, storage, execUUID))
+                } else {
+                  for (const n in storage) {
                     if (Number(n) > 0) {
                       execUUID = generateUUID()
                     }
-                    uploadJobs.push(upload(objectName, dumpToFilePath, database.objectStorage[n], execUUID))
+                    uploadJobs.push(upload(objectName, dumpToFilePath, storage[n], execUUID))
                   }
                 }
 
@@ -553,7 +543,7 @@ export default (db, log) => {
                 })
               }
 
-              db.data.codes.find(i => i.uuid === uuid).assign({
+              Object.assign(db.data.codes.find(i => i.uuid === uuid), {
                 lastExecTime: startTime,
                 updatedTime: new Date().getTime()
               })
@@ -613,20 +603,21 @@ export default (db, log) => {
             }
           })
 
-          if (dbs.has(databases[n].uuid)) { // 如果已经存在任务，则取消旧任务
-            const oldJob = dbs.get(databases[n].uuid)
-            oldJob.job.cancel()
-            log.debug('更新了定时任务：' + databases[n].uuid + ' (' + databases[n].cron + ')')
-          } else {
-            log.debug('创建了新定时任务：' + databases[n].uuid + ' (' + databases[n].cron + ')')
+          if (previous) {
+            previous.job.cancel()
+            dbs.delete(uuid)
           }
 
-          dbs.set(uuid, Object.assign(databases[n], {
-            job
-          }))
+          if (!job) {
+            log.error({ uuid, cron }, '无效的定时任务')
+            continue
+          }
+          job.on('error', err => log.error(err))
+          dbs.set(uuid, { cron, job })
+          log.debug((previous ? '更新了定时任务：' : '创建了新定时任务：') + uuid + ' (' + cron + ')')
         }
       }
-    })
+    }).on('error', err => log.error(err))
   } catch (err) {
     log.error(err)
   }

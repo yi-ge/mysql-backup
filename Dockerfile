@@ -1,20 +1,20 @@
-FROM node:16.3-alpine3.12
+FROM node:24.22.3-bookworm-slim
 LABEL AUTHOR="yi-ge"
 LABEL maintainer="a@wyr.me"
 
-RUN apk add --no-cache \
-  bash \
-  ca-certificates \
-  git
-
-RUN mkdir /project
-
-ADD . /project
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates git \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /project
 
-RUN yarn
+COPY package.json yarn.lock ./
+COPY patches ./patches
+RUN yarn install --frozen-lockfile --non-interactive --production
+
+COPY src ./src
+RUN mkdir -p db
 
 EXPOSE 80
 
-CMD ["npm", "start"]
+CMD ["node", "src/main.js"]

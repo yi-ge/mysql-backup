@@ -10,12 +10,12 @@ function main () {
       user: 'root',
       password: '',
       database: '', // 数据库名称
-      charset: 'UTF8_GENERAL_CI',
+      charset: 'UTF8MB4_GENERAL_CI',
       ssl: null
     },
     dumpOptions: {
       tables: [], // 需要备份的表名（空数组代表全部）
-      excludeTables: false // 如果为false，则上一个选项为“不备份的表”，即黑名单
+      excludeTables: false // true 时排除列出的表，false 时仅备份列出的表
     },
     remoteHost: '', // 选填，仅记录
     remotePort: 3306, // 选填，仅记录

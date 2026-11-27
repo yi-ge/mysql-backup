@@ -1,5 +1,6 @@
 import { v4 as uuid } from 'uuid'
 import auth from './auth.js'
+import { mkdir } from 'fs/promises'
 import { join, dirname } from 'path'
 import { Low, JSONFile } from 'lowdb'
 import { fileURLToPath } from 'url'
@@ -9,7 +10,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const SYSTEM_NAME = 'mysql-backup'
 const isDev = process.env.NODE_ENV ? process.env.NODE_ENV === 'development' : false
 // Use JSON file for storage
-const file = join(isDev ? (join(__dirname, '../../db')) : (process.env.WORKPATH || 'db'), SYSTEM_NAME + '-db.json')
+export const workPath = isDev ? join(__dirname, '../../db') : (process.env.WORKPATH || 'db')
+await mkdir(workPath, { recursive: true })
+const file = join(workPath, SYSTEM_NAME + '-db.json')
 const adapter = new JSONFile(file)
 const db = new Low(adapter)
 

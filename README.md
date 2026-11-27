@@ -37,7 +37,7 @@ Demo: [https://mysql-backup-demo.wyr.me](https://mysql-backup-demo.wyr.me)
 ```bash
 docker run -itd --name mysql-backup --restart always \
     -v /etc/localtime:/etc/localtime:ro \
-    -v /data/db:/usr/src/app/db \
+    -v /data/db:/project/db \
     -p 8080:80 \
     wy373226722/mysql-backup:latest
 ```
@@ -45,7 +45,7 @@ docker run -itd --name mysql-backup --restart always \
 **注意事项：**
 
 1. 为确保定时任务准确执行，请确保服务器宿主机的时区和时间设置正常。
-2. 请修改`-v /data/db:/usr/src/app/db`为本地数据库存储路径，经 Docker 升级程序可不丢失数据。
+2. 将 `/data/db` 改为宿主机上的配置存储目录，保留容器内路径 `/project/db`。如果旧容器使用了之前示例中的 `/usr/src/app/db`，请在替换容器前用 `docker cp mysql-backup:/project/db/mysql-backup-db.json ./mysql-backup-db.json` 导出实际配置，再将该文件放入新挂载目录。
 
 **国内用户高速通道:**
 
@@ -78,7 +78,7 @@ docker run --detach \
 
 docker run -itd --name mysql-backup --restart always \
     -v /etc/localtime:/etc/localtime:ro \
-    -v /data/db:/usr/src/app/db \
+    -v /data/db:/project/db \
     --env "VIRTUAL_PORT=80" \
     --env "VIRTUAL_HOST=你的域名" \
     --env "LETSENCRYPT_HOST=你的域名" \
@@ -93,10 +93,39 @@ docker run -itd --name mysql-backup --restart always \
 | `PORT`       | `"80"`      | `端口号`                     |
 | `HOST`       | `"0.0.0.0"` | `监听的HOST`                 |
 | `JWT_SECRET` | `随机数`    | `JWT私钥`                    |
-| `WORKPATH`   | `db`        | `存储本地数据库（JSON文件）` |
+| `WORKPATH`   | `db`        | 配置 JSON 和备份临时文件所在目录 |
 
 **注意**  
 通常情况下使用默认值即可，其余配置项可在系统后台进行配置。
+
+### 从源码运行和验证
+
+使用 Node.js 24 和 Yarn 1.x 启动当前源码。Docker Hub 上的历史镜像可通过上面的命令启动，当前源码可以用 `docker build -t mysql-backup:local .` 构建。
+
+```bash
+yarn install --frozen-lockfile
+HOST=127.0.0.1 PORT=8080 WORKPATH=./db yarn start
+```
+
+集成测试启动 Web 服务并运行真实的定时任务，使用本地模拟的 OSS 处理上传、解冻和下载，再通过 `mysql` 客户端导入 SQL。准备一个只用于测试的 MySQL 实例，并设置其端口和管理员密码。测试会创建并清理自己使用的数据库和账号。
+
+```bash
+MYSQL_TEST_PORT=33060 MYSQL_TEST_PASSWORD='test-password' yarn test
+```
+
+可用 `MYSQL_TEST_USER` 指定管理员账号（默认 `root`），用 `MYSQL_TEST_CLIENT` 指定 `mysql` 可执行文件。
+
+### 验证备份和恢复
+
+使用独立的 MySQL 备份账号。对备份库授予 `SELECT`、`SHOW VIEW` 和 `TRIGGER`，分别用于读取表数据、视图和触发器。保存任务后等到首次执行，检查执行记录，再通过后台解冻并下载备份。开启 ZIP 加密时需要填写密码，下载后可使用支持 AES 的解压工具（如 7-Zip）提取内部的 SQL。
+
+将 SQL 导入单独创建的空数据库，并检查表数据、视图和触发器能否正常使用。
+
+```bash
+mysql --default-character-set=utf8mb4 -h 127.0.0.1 -u restore_user -p isolated_restore < backup.sql
+```
+
+`dumpOptions.tables` 为空时导出全部表和视图。列表有值时，`excludeTables: false` 只导出列出的条目，`true` 则排除它们。备份过程中有并发写入时，各表的内容可能来自不同时间点。
 
 ## API 文档
 
@@ -176,8 +205,9 @@ docker run -itd --name mysql-backup --restart always \
 5. 是否具备删除对象存储中备份数据的功能？  
    A: 不具备。在对象存储中的数据以“年/月/日”路径存储。为防止极端情况下导致数据被删除，故而不提供直接删除对象存储中备份数据的功能。
 
-6. MySQL8 支持？  
-   A: 支持 MySQL8，建议添加专属备份账号，使用 MySQL 自带身份认证。由于 mysqldump 模块限制，SHA2 认证方式尚未支持，此功能将随组件更新。
+6. 支持哪些 MySQL 版本和认证方式？
+
+   A: 持续集成覆盖 MySQL 5.7、8.0 和 8.4，包括 MySQL 8 的默认 `caching_sha2_password`。新任务使用 `UTF8MB4_GENERAL_CI`，已保存的旧模板值 `UTF8_GENERAL_CI` 会在连接时自动使用对应的 `utf8mb4` 排序规则。
 
 ## 相关博文
 

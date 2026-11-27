@@ -1,0 +1,71 @@
+name: Backup verification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: MySQL ${{ matrix.mysql }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mysql: ['5.7.44', '8.0.46', '8.4.13']
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql }}
+        env:
+          MYSQL_ROOT_PASSWORD: backup-fixture
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysqladmin --protocol=TCP -h127.0.0.1 -uroot -pbackup-fixture ping --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.3'
+      - run: yarn install --frozen-lockfile --non-interactive
+      - run: yarn test
+        env:
+          MYSQL_TEST_PORT: ${{ job.services.mysql.ports['3306'] }}
+          MYSQL_TEST_PASSWORD: backup-fixture
+
+  docker:
+    name: Docker build and persistence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build --tag mysql-backup:ci .
+      - name: Verify the application and persisted configuration
+        run: |
+          work_path=$(mktemp -d)
+          container=mysql-backup-ci
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf "$work_path"' EXIT
+          start_container() {
+            docker run --detach --name "$container" \
+              --publish 127.0.0.1::80 \
+              --volume "$work_path:/project/db" mysql-backup:ci
+            address=$(docker port "$container" 80/tcp)
+            if ! curl --fail --silent --show-error --retry 12 --retry-all-errors \
+              --retry-delay 1 --max-time 2 "http://$address/documentation/json" >/dev/null; then
+              docker logs "$container"
+              return 1
+            fi
+          }
+          start_container
+          original_key=$(jq -er '.config.sessionKey' "$work_path/mysql-backup-db.json")
+          docker rm --force "$container"
+          start_container
+          test "$original_key" = "$(jq -er '.config.sessionKey' "$work_path/mysql-backup-db.json")"

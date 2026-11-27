@@ -100,20 +100,28 @@ docker run -itd --name mysql-backup --restart always \
 
 ### 从源码运行和验证
 
-使用 Node.js 24 和 Yarn 1.x 启动当前源码。Docker Hub 上的历史镜像可通过上面的命令启动，当前源码可以用 `docker build -t mysql-backup:local .` 构建。
+使用 `.node-version` 指定的 Node.js 和随附的 npm 启动当前源码。从使用 Yarn 的旧检出升级时，运行 `npm ci` 即可按 `package-lock.json` 重建 `node_modules`。Docker Hub 上的历史镜像可通过上面的命令启动，当前源码可以用 `docker build -t mysql-backup:local .` 构建。
 
 ```bash
-yarn install --frozen-lockfile
-HOST=127.0.0.1 PORT=8080 WORKPATH=./db yarn start
+npm ci
+HOST=127.0.0.1 PORT=8080 WORKPATH=./db npm start
 ```
+
+开发时可运行 `npm run dev`，Node.js 会在后端模块变化时重启服务。
 
 集成测试启动 Web 服务并运行真实的定时任务，使用本地模拟的 OSS 处理上传、解冻和下载，再通过 `mysql` 客户端导入 SQL。准备一个只用于测试的 MySQL 实例，并设置其端口和管理员密码。测试会创建并清理自己使用的数据库和账号。
 
 ```bash
-MYSQL_TEST_PORT=33060 MYSQL_TEST_PASSWORD='test-password' yarn test
+MYSQL_TEST_PORT=33060 MYSQL_TEST_PASSWORD='test-password' npm test
 ```
 
 可用 `MYSQL_TEST_USER` 指定管理员账号（默认 `root`），用 `MYSQL_TEST_CLIENT` 指定 `mysql` 可执行文件。
+
+### 更新依赖
+
+使用 `npm install <依赖>@<版本>` 更新运行依赖，开发依赖加 `--save-dev`。一起提交 `package.json` 和 `package-lock.json`，并运行 `npm ci`、`npm run lint` 及集成测试。使用 `npm audit --omit=dev` 查看生产依赖告警。Dependabot 每周检查 npm、Docker 基础镜像和 GitHub Actions 的版本更新。
+
+`mysqldump` 固定在 3.2.0，安装时会应用 `patches/` 中的修复。两条 MySQL 连接路径通过 npm override 使用同一版本的 `mysql2`。升级这两个包时需验证补丁可应用并重新运行恢复测试。
 
 ### 验证备份和恢复
 

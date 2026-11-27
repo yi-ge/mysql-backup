@@ -39,15 +39,6 @@ export const sendSMS = async (action, params, SMSConfig) => {
       } else {
           if (resData.result === 0) {
 
-            const result = resData.detail
-
-            for (const n in result) {
-              if (result.status === 0) result.status = 1
-              if (result.status === 1) result.status = -1
-              if (result.errmsg) result.msg = result.errmsg
-              if (result.sid) result.send_id = result.sid
-            }
-
             // 参数	        必选	类型  	描述
             // status	      是	number	错误码，1表示成功（计费依据），非1表示失败
             // msg	        否	string	错误消息，status 非1时的具体错误信息
@@ -58,7 +49,7 @@ export const sendSMS = async (action, params, SMSConfig) => {
 
             resolve({
               status: 1,
-              result
+              result: resData.detail
             })
           } else {
             reject({

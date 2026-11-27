@@ -143,7 +143,10 @@ test('scheduled backups restore data, views and triggers from SQL and encrypted 
       return json.result
     }
     assert.equal((await fetch(address)).status, 200)
-    assert.equal((await fetch(address + '/documentation/json')).status, 200)
+    assert.equal((await fetch(address + '/documentation/')).status, 200)
+    const spec = await fetch(address + '/documentation/json')
+    assert.equal(spec.status, 200)
+    assert.ok((await spec.json()).paths['/api/database/download'])
     jwt = (await api('/api/manage/user/login', 'POST', { username: 'admin', password: 'admin888' })).token
     assert.ok(jwt)
     const settings = JSON.parse(await api('/api/setting'))

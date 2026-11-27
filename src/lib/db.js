@@ -1,25 +1,18 @@
-import { v4 as uuid } from 'uuid'
+import { randomUUID } from 'node:crypto'
 import auth from './auth.js'
 import { mkdir } from 'fs/promises'
-import { join, dirname } from 'path'
-import { Low, JSONFile } from 'lowdb'
-import { fileURLToPath } from 'url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
+import { join } from 'path'
+import { Low } from 'lowdb'
+import { JSONFile } from 'lowdb/node'
 
 const SYSTEM_NAME = 'mysql-backup'
 const isDev = process.env.NODE_ENV ? process.env.NODE_ENV === 'development' : false
 // Use JSON file for storage
-export const workPath = isDev ? join(__dirname, '../../db') : (process.env.WORKPATH || 'db')
+export const workPath = isDev ? join(import.meta.dirname, '../../db') : (process.env.WORKPATH || 'db')
 await mkdir(workPath, { recursive: true })
 const file = join(workPath, SYSTEM_NAME + '-db.json')
 const adapter = new JSONFile(file)
-const db = new Low(adapter)
-
-// Read data from JSON file, this will set db.data content
-await db.read()
-
-db.data ||= {
+const db = new Low(adapter, {
   config: {},
   users: [],
   databases: [],
@@ -27,12 +20,14 @@ db.data ||= {
   codes: [],
   download: [],
   logs: []
-}
+})
+
+await db.read()
 
 if (!db.data.users || db.data.users.length === 0) db.data.users = [{
   username: 'admin',
   password: auth.createPassword('admin888'),
-  token: uuid(),
+  token: randomUUID(),
   isAdministrator: true,
   createdTime: new Date().getTime()
 }]

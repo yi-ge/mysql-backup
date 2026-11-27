@@ -4,11 +4,11 @@
   "description": "Automatically get your mysql database backup and uploading it to the Object Storage.",
   "main": "src/main.js",
   "scripts": {
-    "dev": "nodemon src/main.js",
+    "dev": "node --watch src/dev.js",
     "start": "node src/main.js",
-    "lint": "standard src/**/*.js",
-    "lint:fix": "standard --fix src/**/*.js",
-    "test": "node --test test/backup.integration.js",
+    "lint": "eslint src test/backup.integration.js test/dependency-compat.test.js",
+    "lint:fix": "npm run lint -- --fix",
+    "test": "node --test test/backup.integration.js test/dependency-compat.test.js",
     "postinstall": "patch-package --error-on-fail"
   },
   "repository": {
@@ -27,76 +27,39 @@
   "homepage": "https://github.com/yi-ge/mysql-backup#readme",
   "type": "module",
   "dependencies": {
-    "ali-oss": "^6.16.0",
-    "archiver": "^5.3.0",
-    "archiver-zip-encrypted": "^1.0.10",
-    "axios": "^0.25.0",
-    "cos-nodejs-sdk-v5": "^2.10.0",
-    "dayjs": "^1.10.6",
-    "fastify": "^3.27.0",
-    "fastify-cors": "^6.0.2",
-    "fastify-jwt": "^4.1.3",
-    "fastify-plugin": "^3.0.0",
-    "fastify-static": "^4.5.0",
-    "fastify-swagger": "^4.13.1",
-    "jssha": "^3.2.0",
-    "lowdb": "^2.1.0",
+    "@fastify/cors": "^11.4.3",
+    "@fastify/jwt": "^10.2.9",
+    "@fastify/static": "^10.1.12",
+    "@fastify/swagger": "^9.9.5",
+    "@fastify/swagger-ui": "^6.1.5",
+    "@zip.js/zip.js": "2.25.0",
+    "ali-oss": "^6.23.0",
+    "axios": "^1.21.1",
+    "cos-nodejs-sdk-v5": "^3.0.0",
+    "dayjs": "^1.11.23",
+    "fastify": "^5.12.8",
+    "lowdb": "^7.0.1",
     "mysql2": "3.24.6",
     "mysqldump": "3.2.0",
-    "node-schedule": "^2.0.0",
+    "node-schedule": "^2.1.2",
     "patch-package": "8.0.1",
-    "pino-pretty": "^7.4.0",
-    "qcloudsms_js": "^0.1.1",
-    "qiniu": "https://github.com/yi-ge/nodejs-sdk",
-    "request": "^2.88.2",
-    "uuid": "^8.3.2"
+    "pino-pretty": "^13.2.0",
+    "qcloudsms_js": "0.1.1",
+    "qiniu": "^7.15.2"
   },
   "devDependencies": {
-    "@zip.js/zip.js": "2.25.0",
-    "nodemon": "^2.0.12",
-    "standard": "^16.0.3"
-  },
-  "resolutions": {
-    "mysqldump/mysql2": "3.24.6"
-  },
-  "standard": {
-    "parser": "babel-eslint",
-    "globals": [
-      "$",
-      "monaco"
-    ],
-    "env": {
-      "browser": true,
-      "node": true
-    },
-    "parserOptions": {
-      "ecmaVersion": 9,
-      "sourceType": "module"
-    },
-    "ignore": [
-      "src/ui/",
-      "src/template"
-    ]
-  },
-  "nodemonConfig": {
-    "ignore": [
-      ".git",
-      "node_modules/**/node_modules"
-    ],
-    "delay": "2500",
-    "env": {
-      "NODE_ENV": "development"
-    },
-    "verbose": true,
-    "execMap": {
-      "js": "node --harmony"
-    },
-    "watch": [
-      "src/"
-    ],
-    "ext": "js,json"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0"
   },
   "engines": {
-    "node": ">= 18.0.0"
-  }
+    "node": "^22.13.0 || >=24.0.0",
+    "npm": ">=10.9.0"
+  },
+  "overrides": {
+    "mysqldump": {
+      "mysql2": "$mysql2"
+    }
+  },
+  "packageManager": "npm@11.19.1"
 }

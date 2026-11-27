@@ -18,7 +18,7 @@ const getType = (obj) => {
 
 export const deepClone = (data) => {
   const t = getType(data)
-  let o = null
+  let o
 
   if (t === 'array') {
     o = [];

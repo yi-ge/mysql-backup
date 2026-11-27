@@ -1,16 +1,13 @@
+# syntax=docker/dockerfile:1
 FROM node:24.22.3-bookworm-slim
 LABEL AUTHOR="yi-ge"
 LABEL maintainer="a@wyr.me"
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates git \
-  && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /project
 
-COPY package.json yarn.lock ./
+COPY package.json package-lock.json ./
 COPY patches ./patches
-RUN yarn install --frozen-lockfile --non-interactive --production
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
 
 COPY src ./src
 RUN mkdir -p db

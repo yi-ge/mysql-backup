@@ -1,10 +1,7 @@
-import JsSHA from 'jssha'
+import { createHash } from 'node:crypto'
 
 export default {
   createPassword (password) {
-    const shaObj = new JsSHA('SHA-512', 'TEXT')
-    shaObj.update(password)
-    const hash = shaObj.getHash('HEX')
-    return hash
+    return createHash('sha512').update(password, 'utf8').digest('hex')
   }
 }

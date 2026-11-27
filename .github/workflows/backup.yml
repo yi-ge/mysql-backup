@@ -58,8 +58,8 @@ jobs:
               --publish 127.0.0.1::80 \
               --volume "$work_path:/project/db" mysql-backup:ci
             address=$(docker port "$container" 80/tcp)
-            if ! curl --fail --silent --show-error --retry 12 --retry-connrefused \
-              --retry-delay 1 "http://$address/documentation/json" >/dev/null; then
+            if ! curl --fail --silent --show-error --retry 12 --retry-all-errors \
+              --retry-delay 1 --max-time 2 "http://$address/documentation/json" >/dev/null; then
               docker logs "$container"
               return 1
             fi

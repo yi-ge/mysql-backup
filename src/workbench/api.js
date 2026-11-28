@@ -14,7 +14,10 @@ const runRef = z.strictObject({ runId: id })
 const archiveRef = z.strictObject({ archiveId: id })
 const submit = z.strictObject({ planId: id, requestId: id })
 const recovery = z.strictObject({ archiveId: id, requestId: id, target: z.string().max(120) })
-const listing = z.strictObject({ planId: id.optional(), limit: z.number().int().min(1).max(100).default(30), before: z.number().int().positive().optional() })
+const listing = z.strictObject({
+  planId: id.optional(), limit: z.number().int().min(1).max(100).default(30),
+  before: z.number().int().positive().optional(), beforeId: id.optional(), archivesOnly: z.boolean().default(false)
+})
 const withRevision = z.strictObject({ planId: id.optional(), revision: z.number().int().positive().optional(), plan: planInput })
 const setup = credentials.extend({ code: z.string().min(32).max(128) })
 const member = credentials.extend({ role: z.enum(['admin', 'operator', 'viewer']) })
@@ -87,7 +90,7 @@ export function createApi (store, { recoveryTarget, publicUrl, remote = false })
       const plan = store.assertPlan(actor, args.planId)
       return store.savePlan(actor, { ...plan, ...args })
     }],
-    'runs.list': ['read', listing, (actor, args) => store.listRuns(actor, args.planId, args.limit, args.before)],
+    'runs.list': ['read', listing, (actor, args) => store.listRuns(actor, args)],
     'runs.get': ['read', runRef, (actor, args) => store.getRun(actor, args.runId)],
     'runs.start': ['operate', submit, (actor, args) => store.enqueue(actor, store.assertPlan(actor, args.planId), 'backup', args.requestId)],
     'archive.status': ['read', archiveRef, (actor, args) => availability(actor, args, false)],
@@ -184,10 +187,16 @@ export function createApi (store, { recoveryTarget, publicUrl, remote = false })
       if (op === 'session.login') {
         const { name, password } = requireInput(credentials, args)
         limit(peer, name)
-        const user = store.getUser(name)
-        if (!user || !await verifyPassword(password, user.hash)) throw new AppError('invalid_credentials', 401)
-        if (!user.hash.startsWith('scrypt:')) store.upgradeHash(name, user.hash, await hashPassword(password))
-        return openSession(store.getUser(name))
+        const original = store.getUser(name)
+        if (!original || !await verifyPassword(password, original.hash)) throw new AppError('invalid_credentials', 401)
+        let authenticatedHash = original.hash
+        if (!original.hash.startsWith('scrypt:')) {
+          const replacement = await hashPassword(password)
+          if (store.upgradeHash(name, original.hash, replacement)) authenticatedHash = replacement
+        }
+        const current = store.getUser(name)
+        if (!current || current.hash !== authenticatedHash) throw new AppError('invalid_credentials', 401)
+        return openSession(current)
       }
       const actor = actorFor(session)
       if (op === 'session.logout') {

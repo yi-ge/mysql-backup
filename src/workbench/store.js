@@ -252,7 +252,7 @@ export function openStore (root) {
   return {
     close: () => db.close(), getStorage, setStorage, getNotifications, saveNotifications, needsSetup, getUser, createAdmin,
     migration: () => JSON.parse(metadata('legacy-migration') ?? 'null'),
-    upgradeHash: (name, old, hash) => query('UPDATE users SET hash=? WHERE name=? AND hash=?').run(hash, name, old),
+    upgradeHash: (name, old, hash) => Boolean(query('UPDATE users SET hash=? WHERE name=? AND hash=?').run(hash, name, old).changes),
     listMembers: () => query('SELECT name,role FROM users ORDER BY name').all(),
     saveMember: (name, hash, role) => {
       if (getUser(name)?.role === 'admin' && role !== 'admin') throw new AppError('cannot_demote_admin', 409)
@@ -266,11 +266,15 @@ export function openStore (root) {
         const verified = query("SELECT updated FROM runs WHERE plan=? AND kind='restore' AND state='completed' ORDER BY updated DESC LIMIT 1").get(plan.id)
         return { ...publicPlan(plan), nextAt: plan.nextAt, lastSuccessAt: last?.created ?? null, lastVerifiedAt: verified?.updated ?? null }
       }),
-    listRuns (actor, planId, limit, before = Number.MAX_SAFE_INTEGER) {
+    listRuns (actor, { planId, limit, before = Number.MAX_SAFE_INTEGER, beforeId, archivesOnly = false }) {
       if (planId) assertPlan(actor, planId)
       return query(
-        "SELECT r.* FROM runs r JOIN plans p ON p.id=r.plan WHERE (?='admin' OR p.owner=?) AND (? IS NULL OR r.plan=?) AND r.created<? ORDER BY r.created DESC,r.id LIMIT ?"
-      ).all(actor.role, actor.name, planId ?? null, planId ?? null, before, limit).map(runView)
+        `SELECT r.* FROM runs r JOIN plans p ON p.id=r.plan
+         WHERE (?='admin' OR p.owner=?) AND (? IS NULL OR r.plan=?)
+         AND (?=0 OR EXISTS (SELECT 1 FROM archives a WHERE a.run=r.id))
+         AND (r.created<? OR (r.created=? AND r.id>?))
+         ORDER BY r.created DESC,r.id LIMIT ?`
+      ).all(actor.role, actor.name, planId ?? null, planId ?? null, Number(archivesOnly), before, before, beforeId ?? null, limit).map(runView)
     },
     enqueue: (actor, plan, kind, request, detail) => transaction(() => enqueue(actor, plan, kind, request, detail)),
     tick,

@@ -11,8 +11,21 @@ import mysql from 'mysql2/promise.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { createApplication } from '../src/workbench/app.js'
+import { createApi } from '../src/workbench/api.js'
+import { hashPassword } from '../src/workbench/security.js'
 
 const host = '127.0.0.1'
+
+test('a login cannot inherit a password change made during authentication', async () => {
+  const name = 'operator'
+  const password = 'original-fixture-password'
+  const original = { name, role: 'operator', hash: await hashPassword(password) }
+  const updated = { ...original, hash: await hashPassword('new-fixture-password') }
+  let calls = 0
+  const api = createApi({ getUser: () => calls++ === 0 ? original : updated }, {})
+  await assert.rejects(api.dispatch({ op: 'session.login', args: { name, password } }, host), { code: 'invalid_credentials' })
+  assert.equal(calls, 2)
+})
 async function listen (server) {
   server.listen(0, host)
   await once(server, 'listening')
@@ -74,7 +87,7 @@ test('migrated workbench runs a scheduled AES backup and a scoped recovery drill
   await db.query(
     'USE ??; CREATE TABLE ledger(id INT PRIMARY KEY, label VARCHAR(40), bytes BLOB); CREATE TABLE journal(id INT PRIMARY KEY); ' +
     "INSERT INTO ledger VALUES(1,'订单😀',0x0027ff); CREATE VIEW ledger_view AS SELECT label FROM ledger; " +
-    'CREATE TRIGGER ledger_trigger AFTER INSERT ON ledger FOR EACH ROW INSERT INTO journal VALUES(NEW.id)', [origin]
+    'CREATE TRIGGER ledger_trigger AFTER INSERT ON ledger FOR EACH ROW INSERT INTO journal VALUES(NEW.id);', [origin]
   )
   t.after(async () => {
     try {

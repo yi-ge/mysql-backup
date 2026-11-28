@@ -97,6 +97,7 @@ tr[data-selected="true"] { background: var(--accent-weak); }
 .archive-copy, .action-review { display: grid; gap: 7px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .hash { overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
 .download a, .success, .notice { display: flex; align-items: center; gap: 7px; }
+.history-pages { justify-content: flex-end; padding: 12px 16px; }
 .error, .notice { padding: 9px 12px; border-radius: 7px; margin-bottom: 10px; }
 .error { background: var(--bad-bg); color: var(--bad); }
 .notice { color: var(--ok); background: var(--ok-bg); }

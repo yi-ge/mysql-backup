@@ -10,7 +10,7 @@ import { promisify } from 'node:util'
 import { BlobReader, ZipReader, ZipWriterStream } from '@zip.js/zip.js'
 import mysql from 'mysql2/promise.js'
 import mysqldump from 'mysqldump'
-import { backupConnection } from '../lib/mysql.js'
+import { backupConnection, backupTriggerOptions } from '../lib/mysql.js'
 import { sendSMS as sendTencent } from '../lib/sms/tencent.js'
 import { sendSMS as sendSubmail } from '../lib/sms/submail.js'
 import { AppError } from './contract.js'
@@ -85,7 +85,7 @@ export function startWorker (store, root, { recoveryTarget, mysqlClient, log }) 
     update('exporting', details)
     const dump = await mysqldump({
       connection: backupConnection({ ...run.plan.connection, connectTimeout: 10000 }),
-      dump: { tables: run.plan.tables, excludeTables: run.plan.excludeTables },
+      dump: { tables: run.plan.tables, excludeTables: run.plan.excludeTables, trigger: backupTriggerOptions() },
       dumpToFile: sql
     })
     if (!dump.tables?.length) throw new AppError('no_tables_selected')

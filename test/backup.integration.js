@@ -103,7 +103,7 @@ test('scheduled backups restore data, views and triggers from SQL and encrypted 
     'INSERT INTO items VALUES (1, ?, UNHEX(?)); ' +
     'INSERT INTO ignored VALUES (5); ' +
     'CREATE VIEW item_names AS SELECT name FROM items; ' +
-    'CREATE TRIGGER items_audit AFTER INSERT ON items FOR EACH ROW INSERT INTO audit VALUES (NEW.id)',
+    'CREATE TRIGGER items_audit AFTER INSERT ON items FOR EACH ROW INSERT INTO audit VALUES (NEW.id);',
     [source, '恢复😀', '00FF27']
   )
 

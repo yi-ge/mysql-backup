@@ -6,6 +6,7 @@ import { Activity, Archive, ArrowDownToLine, ArrowRight, ArrowUpRight, CircleChe
 import { PlanEditor } from './editor'
 import { SettingsPage } from './settings'
 import { connectHost, investigate } from './host'
+import { useRunHistory } from './history'
 import { errorText, pages, providers, size, stamp, statuses } from './data'
 import type { Actor, Api, ArchiveCopy, Page, Plan, Run } from './data'
 import './style.css'
@@ -145,6 +146,8 @@ function Workbench ({ session, onLogout }: { session: Session; onLogout: () => v
       throw err
     }
   }, [session.session, onLogout])
+  const reportError = useCallback((err: unknown) => setError(errorText(err)), [])
+  const historyPage = useRunHistory(api, page, filter, reportError)
 
   useEffect(() => connectHost(info => {
     if (info.locale) { document.documentElement.lang = info.locale; setEnglish(info.locale === 'en-US') }
@@ -166,6 +169,7 @@ function Workbench ({ session, onLogout }: { session: Session; onLogout: () => v
   }, [refresh])
 
   function navigate (destination: Page) {
+    if (destination !== page) historyPage.reset()
     setPage(destination); setEditing(false)
     location.hash = destination
   }
@@ -175,10 +179,13 @@ function Workbench ({ session, onLogout }: { session: Session; onLogout: () => v
     setEditing(true)
   }
   useEffect(() => {
-    const handler = () => setPage(pages.find(p => p.id === location.hash.slice(1))?.id ?? 'overview')
+    const handler = () => {
+      const destination = pages.find(p => p.id === location.hash.slice(1))?.id ?? 'overview'
+      if (destination !== page) { historyPage.reset(); setPage(destination) }
+    }
     addEventListener('hashchange', handler)
     return () => removeEventListener('hashchange', handler)
-  }, [])
+  }, [historyPage.reset, page])
 
   function openRun (id: string) {
     setSelected(id)
@@ -201,13 +208,13 @@ function Workbench ({ session, onLogout }: { session: Session; onLogout: () => v
     try { await api('plans.toggle', { planId: plan.id, revision: plan.revision, enabled: !plan.enabled }); await refresh() } catch (err) { setError(errorText(err)) }
   }
 
-  const selectedRun = runs.find(item => item.id === selected)
+  const showRuns = historyPage.listing?.runs ?? []
+  const selectedRun = showRuns.find(item => item.id === selected) ?? runs.find(item => item.id === selected)
   const activePlans = plans.filter(plan => plan.enabled)
   const currentRuns = runs.filter(run => run.state === 'running' || run.state === 'queued')
   const failure = new Map<string, Run>()
   for (const run of runs) if (run.kind === 'backup' && !failure.has(run.planId)) failure.set(run.planId, run)
   const issues = [...failure.values()].filter(run => ['partial', 'failed', 'unknown'].includes(run.state))
-  const showRuns = runs.filter(run => (page !== 'archives' || run.archives.length > 0) && (!filter || run.planId === filter))
   const pageLabel = pages.find(item => item.id === page)!
   const selectedPlan = plans.find(plan => plan.id === selectedRun?.planId)
   return <div className="app-shell">
@@ -229,7 +236,7 @@ function Workbench ({ session, onLogout }: { session: Session; onLogout: () => v
         <div className="page-heading"><div><h1>{english ? pageLabel.en : pageLabel.label}</h1>
           <p className="muted">{page === 'overview' ? '查看备份保护和实际恢复结果。' : page === 'plans' ? '管理数据库连接、执行时间和归档目标。' : page === 'archives' ? '解冻和验证归档，并恢复到独立测试库。' : page === 'runs' ? '追踪备份和恢复的每次执行。' : '管理连接、通知和授权。'}</p></div>
           <div className="row">
-            <button className="icon-button quiet" aria-label="刷新" onClick={() => { setError(''); void refresh() }}><RefreshCw size={17}/></button>
+            <button className="icon-button quiet" aria-label="刷新" onClick={() => { setError(''); historyPage.reload(); void refresh() }}><RefreshCw size={17}/></button>
             {canWrite && (page === 'overview' || page === 'plans') && <button className="primary" onClick={() => openEditor()}><Plus size={17}/> {editor ? '继续编辑计划' : '新建备份计划'}</button>}
           </div>
         </div>
@@ -263,15 +270,20 @@ function Workbench ({ session, onLogout }: { session: Session; onLogout: () => v
         {(page === 'runs' || page === 'archives') && <div className={'run-layout ' + (selectedRun ? 'with-inspector' : '')}>
           <div className="panel list-panel">
             <div className="section-title"><h2>{page === 'archives' ? '归档列表' : '历史记录'}</h2>
-              <label className="inline-filter"><span>备份计划</span><select value={filter} onChange={e => setFilter(e.target.value)}><option value="">全部</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label></div>
+              <label className="inline-filter"><span>备份计划</span><select value={filter} onChange={e => { historyPage.reset(); setSelected(null); setFilter(e.target.value) }}><option value="">全部</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label></div>
             {showRuns.length ? <div className="data-table"><table><thead><tr><th>计划 / 运行类型</th><th>状态</th><th>开始时间</th></tr></thead>
               <tbody>{showRuns.map(run => <tr key={run.id} data-selected={run.id === selected}>
                 <td><button className="run-link quiet" onClick={() => setSelected(run.id)}><span>{plans.find(plan => plan.id === run.planId)?.name ?? run.planId}</span> <ArrowRight size={14}/></button><small>{run.kind === 'backup' ? (run.actor === '$schedule' ? '定时备份' : '手动备份') : '隔离恢复'}</small></td>
-                <td><Badge state={run.state}/></td><td>{stamp(run.createdAt)}</td></tr>)}</tbody></table></div> : <div className="empty"><Archive size={27}/><strong>暂无记录</strong></div>}
+                <td><Badge state={run.state}/></td><td>{stamp(run.createdAt)}</td></tr>)}</tbody></table></div> : <div className="empty"><Archive size={27}/><strong>{historyPage.listing ? '暂无记录' : '正在读取记录…'}</strong></div>}
+            {(historyPage.pageNumber > 1 || historyPage.listing?.hasOlder) && <div className="row history-pages" aria-label="历史记录分页">
+              <button disabled={historyPage.pageNumber === 1} onClick={() => { setSelected(null); historyPage.newer() }}>上一页</button>
+              <span className="muted">第 {historyPage.pageNumber} 页</span>
+              <button disabled={!historyPage.listing?.hasOlder} onClick={() => { setSelected(null); historyPage.older() }}>下一页</button>
+            </div>}
           </div>
           {selectedRun && <RunInspector key={selectedRun.id} api={api} run={selectedRun} plan={selectedPlan} canWrite={canWrite}
             recoveryTarget={session.actor.role === 'admin' ? session.recoveryTarget : null} canDelegate={canDelegate} onClose={() => setSelected(null)}
-            onRun={id => { navigate('runs'); setSelected(id) }} refresh={() => void refresh()}/>}
+            onRun={id => { navigate('runs'); setSelected(id) }} refresh={() => { historyPage.reload(); void refresh() }}/>}
         </div>}
         {page === 'settings' && <SettingsPage api={api} actor={session.actor} recoveryTarget={session.recoveryTarget} onSaved={() => void refresh()}/>}
       </>}

@@ -1,222 +1,85 @@
 # MySQL Backup
 
-[![license](https://img.shields.io/github/license/yi-ge/mysql-backup.svg?style=flat-square)](https://github.com/yi-ge/mysql-backup/blob/master/LICENSE)
-[![GitHub last commit](https://img.shields.io/github/last-commit/yi-ge/mysql-backup.svg?style=flat-square)](https://github.com/yi-ge/mysql-backup)
+[![License](https://img.shields.io/github/license/yi-ge/mysql-backup.svg?style=flat-square)](LICENSE)
+[![Backup verification](https://github.com/yi-ge/mysql-backup/actions/workflows/backup.yml/badge.svg)](https://github.com/yi-ge/mysql-backup/actions/workflows/backup.yml)
 
-[![JavaScript Style Guide](https://cdn.rawgit.com/standard/standard/master/badge.svg)](https://github.com/standard/standard)
+定时全量备份 MySQL 到阿里云 OSS、腾讯云 COS 或七牛云。工作台用于管理计划、跟踪运行、解冻和下载归档，以及在空的隔离库演练恢复。同一套工作台可独立运行，也可安装到 DesireCore 桌面或 Web。加密模式使用 AES ZIP。
 
-Automatically get your mysql database backup and uploading it to the Object Storage.
+## 安装工作节点
 
-自动获取 MySQL 数据库备份文件并将其上传到对象存储。
-
-Demo: [https://mysql-backup-demo.wyr.me](https://mysql-backup-demo.wyr.me)
-
-默认超级管理员
-
-```textpalin
-账号：admin
-密码：admin888
-```
-
-![mysql-backup](https://cdn.wyr.me/imgs/mysql-buckup-preview.gif)
-
-## Features
-
-1. 支持加密后压缩上传（默认上传到私密存储的“归档存储”类型，文件需解冻后方可下载）。
-2. 定时自动执行任务。
-3. Web 可视化动态添加配置，支持同时管理多个数据库，可以设置需要备份的表或不需要备份的表。
-4. ~~支持生成单个 PHP 文件，用于仅内网可访问数据库或虚拟主机数据库的备份。~~
-5. ~~支持生成 Shell 文件，用于仅内网可访问数据库的备份。~~（由于 Docker 部署已非常方便，这个功能不再开发）
-6. 支持 Swagger UI 查看 API，方便与其它系统整合。
-7. 支持`超级管理员`添加多个`普通管理员`，`超级管理员`可以管理所有数据库，`普通管理员`之间内容互不可见，适合普通开发团队的使用场景。
-8. 由于此系统仅为灾备设计，仅支持全量备份，默认备份`数据+结构`（包含视图、触发器等），不支持增量备份。如果您的数据非常重要，请勿将此作为唯一备份系统，可配合服务商提供的备份功能使用。
-9. 兼容支持手机端访问。
-
-## 使用方法
+从要部署的源码版本构建镜像，配置独立持久卷。以下示例只在本机监听，远程管理时由 HTTPS 反向代理提供可信域名。
 
 ```bash
-docker run -itd --name mysql-backup --restart always \
-    -v /etc/localtime:/etc/localtime:ro \
-    -v /data/db:/project/db \
-    -p 8080:80 \
-    wy373226722/mysql-backup:latest
+docker build -t mysql-backup:local .
+mkdir -p ./backup-data
+docker run -d --name mysql-backup --restart unless-stopped \
+  -v "$PWD/backup-data:/project/db" -p 127.0.0.1:8080:80 mysql-backup:local
 ```
 
-**注意事项：**
+打开 `http://127.0.0.1:8080`。从持久卷中的 `setup-code` 读取一次性初始化码，创建管理员。初始化后登录，先在「设置」添加私有存储，再建备份计划。计划支持时区、5 或 6 段 Cron、表包含/排除、多个存储目的地和立即运行。以运行记录中的实际结果为准。如果外部上传的结果无法确认，工作台会标记未知，供人工核对。
 
-1. 为确保定时任务准确执行，请确保服务器宿主机的时区和时间设置正常。
-2. 将 `/data/db` 改为宿主机上的配置存储目录，保留容器内路径 `/project/db`。如果旧容器使用了之前示例中的 `/usr/src/app/db`，请在替换容器前用 `docker cp mysql-backup:/project/db/mysql-backup-db.json ./mysql-backup-db.json` 导出实际配置，再将该文件放入新挂载目录。
+OSS 使用 Bucket 的存储类型，COS 和七牛云的上传策略设置归档类型。私有归档的解冻、取回可能计费。并发写入时，备份中的各张表可能来自不同时间点。
 
-**国内用户高速通道:**
-
-阿里云：`docker pull registry.cn-shenzhen.aliyuncs.com/yi-ge/mysql-backup:latest`
-
-腾讯云：`docker pull ccr.ccs.tencentyun.com/yi-ge/mysql-backup:latest`
-
-**推荐用法:**
-配合[docker-letsencrypt-nginx-proxy-companion](https://github.com/JrCs/docker-letsencrypt-nginx-proxy-companion)使用，快速生成 SSL 证书。
-
-```bash
-docker run --detach \
-    --name nginx-proxy \
-    --publish 80:80 \
-    --publish 443:443 \
-    -e ENABLE_IPV6=true \
-    --volume /etc/nginx/certs \
-    --volume /etc/nginx/vhost.d \
-    --volume /usr/share/nginx/html \
-    --volume /var/run/docker.sock:/tmp/docker.sock:ro \
-    jwilder/nginx-proxy
-
-docker run --detach \
-    --name nginx-proxy-acme \
-    --volumes-from nginx-proxy \
-    --volume /var/run/docker.sock:/var/run/docker.sock:ro \
-    --volume acme:/etc/acme.sh \
-    --env "DEFAULT_EMAIL=mail@yourdomain.tld" \
-    nginxproxy/acme-companion
-
-docker run -itd --name mysql-backup --restart always \
-    -v /etc/localtime:/etc/localtime:ro \
-    -v /data/db:/project/db \
-    --env "VIRTUAL_PORT=80" \
-    --env "VIRTUAL_HOST=你的域名" \
-    --env "LETSENCRYPT_HOST=你的域名" \
-    registry.cn-shenzhen.aliyuncs.com/yi-ge/mysql-backup:latest
-```
-
-### 系统环境变量
-
-| 变量名       | 默认值      | 描述                         |
-| ------------ | ----------- | ---------------------------- |
-| `SCHEME`     | `"https"`   | `使用http还是https`          |
-| `PORT`       | `"80"`      | `端口号`                     |
-| `HOST`       | `"0.0.0.0"` | `监听的HOST`                 |
-| `JWT_SECRET` | `随机数`    | `JWT私钥`                    |
-| `WORKPATH`   | `db`        | 配置 JSON 和备份临时文件所在目录 |
-
-**注意**  
-通常情况下使用默认值即可，其余配置项可在系统后台进行配置。
-
-### 从源码运行和验证
-
-使用 `.node-version` 指定的 Node.js 和随附的 npm 启动当前源码。从使用 Yarn 的旧检出升级时，运行 `npm ci` 即可按 `package-lock.json` 重建 `node_modules`。Docker Hub 上的历史镜像可通过上面的命令启动，当前源码可以用 `docker build -t mysql-backup:local .` 构建。
+源码安装使用 [指定版本](.node-version) 的 Node.js 和随附 npm。恢复演练需要系统安装 `mysql` CLI。
 
 ```bash
 npm ci
+npm run build
 HOST=127.0.0.1 PORT=8080 WORKPATH=./db npm start
 ```
 
-开发时可运行 `npm run dev`，Node.js 会在后端模块变化时重启服务。
+| 变量 | 作用 |
+| --- | --- |
+| `PORT` / `HOST` | 应用监听位置，默认 `80` / `0.0.0.0` |
+| `WORKPATH` | 持久数据目录，默认 `db`。DesireCore 注入的 `APP_DATA_DIR` 或 `APP_DATA_ROOT` 优先 |
+| `MYSQL_BACKUP_PUBLIC_URL` | 工作节点对操作者开放的 HTTPS origin。托管工作台依赖它生成下载地址 |
+| `MYSQL_BACKUP_UPSTREAM` | 可选工作节点 HTTPS origin。设置后此进程仅作为工作台代理，也可写入数据目录下的 `console.json` |
+| `MYSQL_BACKUP_RECOVERY` | 运维人员提供的隔离恢复目标 JSON。见下文 |
+| `MYSQL_BACKUP_MYSQL_CLIENT` | 恢复用客户端，默认 `mysql` |
 
-集成测试启动 Web 服务并运行真实的定时任务，使用本地模拟的 OSS 处理上传、解冻和下载，再通过 `mysql` 客户端导入 SQL。准备一个只用于测试的 MySQL 实例，并设置其端口和管理员密码。测试会创建并清理自己使用的数据库和账号。
+同一数据目录只运行一个工作节点。将 SQLite、`.workbench-key` 及必要的历史 JSON 作为整卷进行离线快照并保护访问权限。
+
+## 从旧版迁移
+
+1. 停止旧容器，快照实际配置卷。旧容器内部默认文件为 `/project/db/mysql-backup-db.json`。旧挂载位置不一致时，在删除旧容器前用 `docker cp` 导出文件。
+2. 将旧 JSON 放在新数据卷根目录并启动新版。首次启动事务式导入可解析的配置、用户、计划、运行、存储归档引用和通知。迁移读取已解析的数据字段，历史 JavaScript 始终只保留在旧文件中。旧默认管理员需要重新初始化，其他已迁移用户首次登录时升级密码摘要。迁移状态可在工作台查看。
+3. 核对跳过数量、计划启用状态、时区和下一次执行时间，再验证一条实备份。历史档案可能缺少原始校验和，恢复结果会区分是否对过原始校验。旧页面、JWT 及 Swagger 接口可通过 `MYSQL_BACKUP_LEGACY=1` 在旧模式继续使用。需要回退时，停止新版，恢复旧快照并用旧模式启动。新版写入保存在独立 SQLite，回退前请保留这份卷。
+
+旧版变量、接口及短信模板参见[迁移前的使用说明](https://github.com/yi-ge/mysql-backup/blob/b867780/README.md)。
+
+## 恢复演练
+
+源备份账号按库授予必要的 `SELECT`、`SHOW VIEW`、`TRIGGER` 权限。恢复目标由部署者预先创建，建议使用独立数据库实例。使用只对恢复 schema 有权限的账号。目标 schema 名需与源不同，发起时需为空。通过安全的运行环境变量配置连接，字段包括 `host`、`port`、`user`、`database` 和 `password`。例如目标定义可以形如：
+
+```json
+{"host":"recovery.internal","port":3306,"user":"backup_drill","database":"recovery_sandbox","password":"replace-at-deploy"}
+```
+
+在运行详情选择归档副本，根据对象存储状态解冻。点击「隔离恢复」，确认目标，然后查看校验、导入和对象计数结果。恢复账号、目标和下载权限由服务端管理。若导入中断，目标可能已被部分写入。检查原运行和目标，清理或替换隔离目标后可再次演练。对关键表的数据完整性仍可按业务要求做进一步核对。
+
+## DesireCore 和 Agent
+
+使用已上传镜像的实际 digest 生成固定发布材料：
 
 ```bash
+npm run release:desirecore -- --image "$IMAGE_REPO_DIGEST" --commit "$(git rev-parse HEAD)" --output ./dist-desirecore
+```
+
+按 [DesireCore 纳管和 Web 配置说明](desirecore/run.md) 安装。工作节点应保持常驻。安装材料引用精确镜像和源码提交，密钥、旧配置及业务数据保留在部署侧。
+
+在工作台「设置 → Agent 工具」按用途签发可撤销令牌。MCP 使用 Streamable HTTP `POST /mcp`，通过 `Authorization: Bearer …` 认证。只读工具列出计划和运行、读取回执、检查归档状态。操作范围还支持立即备份、解冻以及按管理员权限发起隔离恢复。由实际权限共同限制访问范围。备份和恢复提交接受 `requestId`，以同一值重试可获取原运行 ID。
+
+## 验证和维护
+
+```bash
+npm ci
+npm run lint
+npm run typecheck:web
+npm run build
 MYSQL_TEST_PORT=33060 MYSQL_TEST_PASSWORD='test-password' npm test
+npm run test:browser
 ```
 
-可用 `MYSQL_TEST_USER` 指定管理员账号（默认 `root`），用 `MYSQL_TEST_CLIENT` 指定 `mysql` 可执行文件。
+测试需一台专用 MySQL，测试会自行创建和删除数据库与最小权限账号。可用 `MYSQL_TEST_USER` 指定管理员，`MYSQL_TEST_CLIENT` 指定客户端路径。CI 覆盖 MySQL 5.7、8.0 和 8.4。集成测试使用本地对象存储服务模拟器，浏览器回归使用系统安装的 Chrome。
 
-### 更新依赖
-
-使用 `npm install <依赖>@<版本>` 更新运行依赖，开发依赖加 `--save-dev`。一起提交 `package.json` 和 `package-lock.json`，并运行 `npm ci`、`npm run lint` 及集成测试。使用 `npm audit --omit=dev` 查看生产依赖告警。Dependabot 每周检查 npm、Docker 基础镜像和 GitHub Actions 的版本更新。
-
-`mysqldump` 固定在 3.2.0，安装时会应用 `patches/` 中的修复。两条 MySQL 连接路径通过 npm override 使用同一版本的 `mysql2`。升级这两个包时需验证补丁可应用并重新运行恢复测试。
-
-### 验证备份和恢复
-
-使用独立的 MySQL 备份账号。对备份库授予 `SELECT`、`SHOW VIEW` 和 `TRIGGER`，分别用于读取表数据、视图和触发器。保存任务后等到首次执行，检查执行记录，再通过后台解冻并下载备份。开启 ZIP 加密时需要填写密码，下载后可使用支持 AES 的解压工具（如 7-Zip）提取内部的 SQL。
-
-将 SQL 导入单独创建的空数据库，并检查表数据、视图和触发器能否正常使用。
-
-```bash
-mysql --default-character-set=utf8mb4 -h 127.0.0.1 -u restore_user -p isolated_restore < backup.sql
-```
-
-`dumpOptions.tables` 为空时导出全部表和视图。列表有值时，`excludeTables: false` 只导出列出的条目，`true` 则排除它们。备份过程中有并发写入时，各表的内容可能来自不同时间点。
-
-## API 文档
-
-**Swagger:** <https://yourdomain/documentation>
-
-**在线文档:** <https://mysql-backup-demo.wyr.me/documentation>
-
-## 支持的对象存储
-
-- 阿里云
-- 腾讯云
-- 七牛云
-
-### 对象存储使用须知
-
-1. `阿里云对象存储`存储请在创建`Bucket`时选择“归档存储”，默认所有数据均创建为`归档存储`类型（最适合备份数据库、价格最低）。
-2. 请创建`“私有”`类型的`Bucket`。
-3. 数据需要先解冻才能访问，归档存储均无免费额度，操作归档存储 API 及取回数据均存在费用。
-4. 归档存储的最小计量大小为 64 KB，小于 64KB 的 Object 按照 64KB 计算存储空间，超过 64KB 的 Object 按照实际大小计算存储空间。
-5. 归档存储最短存储时间为 60 天（腾讯云为 90 天），早于 60 天删除的资源，其存储费用按 60 天计算。
-6. `七牛云对象存储`解冻时间 1 ～ 5 分钟，解冻一次有效期 7 天。`阿里云对象存储`解冻时间 1 分钟，解冻一次有效期 24 小时。
-7. `腾讯云对象存储`恢复模式：分别为标准模式、极速模式、批量模式，解冻一次有效期 7 天。
-
-- 极速模式：需要的时间最短，只需要 1 ～ 15 分钟即可恢复。支持 256MB 以下文件的快速读取。当您在特定情况下，需要紧急获取档案数据的时候，使用加急模式可以大大缩短时间和提高效率。（备份系统默认小于 256MB 使用极速模式）
-- 标准模式：使用标准模式，一般可以在 3 ～ 5 小时完成恢复。（备份系统大于 256MB 且小于 5GB 使用标准模式）
-- 批量模式：成本最低，如果获取档案数据紧急程度低，采用批量模式可以用极低的成本获取大量的档案数据，一般在 5 ～ 12 小时可完成档案数据取回。（备份系统大于 5GB 使用批量模式）
-
-### 对象存储参考文档
-
-阿里云对象存储: [https://github.com/ali-sdk/ali-oss](https://github.com/ali-sdk/ali-oss)  
-腾讯云对象存储: [https://github.com/tencentyun/cos-nodejs-sdk-v5](https://github.com/tencentyun/cos-nodejs-sdk-v5)  
-七牛云对象存储: [https://developer.qiniu.com/kodo/sdk/1289/nodejs](https://developer.qiniu.com/kodo/sdk/1289/nodejs)
-
-## 支持的短信通知
-
-- 腾讯云
-- SUBMAIL
-
-短信功能需在设置中进行配置后才有效。
-
-### 短信通知模板示例 1 （适用于腾讯云）
-
-- 备份成功通知（默认不启用，3 为文件大小）
-  名为"{1}"的数据库于{2}成功备份。{3}，{4}张表，导出{5}秒，上传到{6}耗时{7}秒，总计{8}秒。
-
-- 备份失败通知
-  名为"{1}"的数据库于{2}备份失败。请及时登录备份管理系统查看失败原因。
-
-- 解冻成功通知
-  您在{1}解冻下载名为"{2}"的数据库，其中一个备份文件于{3}解冻成功，请及时登录系统进行下载。
-
-### 短信通知模板示例 2 （适用于 SUBMAIL）
-
-- 备份成功通知（默认不启用）
-  名为"@var(name)"的数据库于@var(createdTime)成功备份。@var(fileSize)，@var(tablesSum)张表，导出@var(dumpTime)秒，上传到@var(objectStorageType)耗时@var(uploadTime)秒，总计@var(jobTime)秒。
-
-- 备份失败通知
-  名为"@var(name)"的数据库于@var(createdTime)备份失败。请及时登录备份管理系统查看失败原因。
-
-- 解冻成功通知
-  您在@var(createdTime)解冻下载名为"@var(name)"的数据库，其中一个备份文件于@var(successTime)解冻成功，请及时登录系统进行下载。
-
-## Q & A
-
-1. 已经有云服务了，为什么还需要使用此系统？  
-   A: 这取决于您的数据重要程度，这是一套灾备系统。
-
-2. 是否支持其他数据库？  
-   A: 这是一个早期的个人业余项目，由于我主要使用 MySQL 数据库，因此在[mysqldump](https://github.com/bradzacher/mysqldump)的基础上实现了 MySQL 的备份。开源的目的就是希望能有更多人的使用这个系统，受益的同时获得其它数据库备份功能的支持。
-
-3. 为什么使用`jQuery + Bootstrap`这样的“过时”前端架构？为什么不用`Angular`、`Vue`、`React`来开发前端？  
-   A: 这是由于历史原因决定的，我最初创建该系统的时候，采用`PHP混合HTML`实现，那时候还没有`Vue`之类的框架。并且`jQuery + Bootstrap`久经岁月考验，适合这类追求稳定的超小型系统。我已将相关依赖都升级为最新版并优化了部分代码。
-
-4. 直接使用代码进行配置存在安全问题吗？  
-   A: 这是一个自用系统，如果已有管理员权限必然也可以操作相应的功能，因此逻辑上不存在由此导致的安全问题。
-
-5. 是否具备删除对象存储中备份数据的功能？  
-   A: 不具备。在对象存储中的数据以“年/月/日”路径存储。为防止极端情况下导致数据被删除，故而不提供直接删除对象存储中备份数据的功能。
-
-6. 支持哪些 MySQL 版本和认证方式？
-
-   A: 持续集成覆盖 MySQL 5.7、8.0 和 8.4，包括 MySQL 8 的默认 `caching_sha2_password`。新任务使用 `UTF8MB4_GENERAL_CI`，已保存的旧模板值 `UTF8_GENERAL_CI` 会在连接时自动使用对应的 `utf8mb4` 排序规则。
-
-## 相关博文
-
-[开源 MySQL 定时备份系统](https://www.wyr.me/post/614)
+依赖更新应同步提交 `package.json` 和 `package-lock.json`，再用 `npm ci` 验证。生产依赖用 `npm audit --omit=dev` 检查。更新 `mysqldump` 或 `mysql2` 时验证现有补丁及导出、恢复兼容性。

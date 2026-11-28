@@ -1,10 +1,9 @@
 import axios from 'axios'
 import qiniu from 'qiniu'
-import db from '../db.js'
+import { getObjectStorage } from './settings.js'
 
-async function getStorage () {
-  await db.read()
-  const { useQINIU, QINIU: settings } = db.data.config.setting.ObjectStorage
+async function getStorage (provided) {
+  const { useQINIU, QINIU: settings } = await getObjectStorage(provided)
   if (!useQINIU) return null
 
   const mac = new qiniu.auth.digest.Mac(settings.accessKey, settings.secretKey)
@@ -16,8 +15,8 @@ async function getStorage () {
   return { settings, mac, config, manager }
 }
 
-export const uploadLocalFileToQiniu = async (key, localFile) => {
-  const storage = await getStorage()
+export const uploadLocalFileToQiniu = async (key, localFile, provided) => {
+  const storage = await getStorage(provided)
   if (!storage) return null
 
   const { settings, mac, config, manager } = storage
@@ -32,8 +31,8 @@ export const uploadLocalFileToQiniu = async (key, localFile) => {
   return key
 }
 
-export const restoreObject = async (objectName) => {
-  const storage = await getStorage()
+export const restoreObject = async (objectName, provided, statusOnly = false) => {
+  const storage = await getStorage(provided)
   if (!storage) return null
 
   const { settings, manager } = storage
@@ -43,13 +42,14 @@ export const restoreObject = async (objectName) => {
   if (stat.data.type !== 2) return -3
   if (stat.data.restoreStatus) return stat.data.restoreStatus + 1
 
+  if (statusOnly) return 0
   const restore = await manager.restoreAr(settings.bucket + ':' + remoteKey, 7)
   if (!restore.ok()) throw restore.resp
   return 1
 }
 
-export const downloadObject = async (objectName) => {
-  const storage = await getStorage()
+export const downloadObject = async (objectName, provided) => {
+  const storage = await getStorage(provided)
   if (!storage) return null
 
   const { settings, manager } = storage
@@ -60,11 +60,13 @@ export const downloadObject = async (objectName) => {
 
   const stat = await manager.stat(settings.bucket, remoteKey)
   if (!stat.ok()) return { status: -11 }
-  if (stat.data.type !== 2) return { status: -3 }
+  if (stat.data.type === 2 && stat.data.restoreStatus !== 2) return { status: -3 }
 
   try {
     const { data } = await axios.get(url, {
       responseType: 'stream',
+      maxRedirects: 0,
+      timeout: 30000,
       decompress: false,
       headers: { 'Accept-Encoding': 'identity' }
     })

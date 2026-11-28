@@ -10,8 +10,6 @@ export const sendSMS = async (action, params, SMSConfig) => {
   // 需要发送短信的手机号码
   const phoneNumbers = SMSConfig.phoneNumbers
 
-  console.log(SMSConfig.action, SMSConfig.action.includes(action), action)
-
   if (!SMSConfig.action.includes(action)) { // 如果没有开启该事件，则不进行操作
     return null
   }
@@ -29,12 +27,9 @@ export const sendSMS = async (action, params, SMSConfig) => {
 
   params = Object.values(params)
 
-  console.log(params)
-
   return new Promise((resolve, reject) => {
     msender.sendWithParam("86", phoneNumbers, templateId, params, smsSign, "", "", function(err, res, resData) {
       if (err) {
-        console.log(err)
         reject(err)
       } else {
           if (resData.result === 0) {

@@ -112,7 +112,7 @@ test('scheduled backups restore data, views and triggers from SQL and encrypted 
   const storage = objectStore()
   const endpoint = await listen(storage.server)
   const app = spawn(process.execPath, ['src/main.js'], {
-    env: { ...process.env, NODE_ENV: 'test', HOST: host, PORT: '0', WORKPATH: workPath, SCHEME: 'http' },
+    env: { ...process.env, NODE_ENV: 'test', MYSQL_BACKUP_LEGACY: '1', HOST: host, PORT: '0', WORKPATH: workPath, SCHEME: 'http' },
     stdio: ['ignore', 'pipe', 'pipe']
   })
   const exited = once(app, 'exit')

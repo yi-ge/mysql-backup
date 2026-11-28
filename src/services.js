@@ -170,8 +170,7 @@ export default [{
         success: false,
         result: {
           msg: 'Password auth failed.',
-          username,
-          password: request.body.password
+          username
         },
         createdTime: new Date().getTime()
       })

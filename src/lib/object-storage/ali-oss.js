@@ -1,5 +1,5 @@
 import OSS from 'ali-oss'
-import db from '../db.js'
+import { getObjectStorage } from './settings.js'
 
 /***
  * 分片上传
@@ -7,15 +7,14 @@ import db from '../db.js'
  * @param objectName
  * @param localFile
  */
-export const uploadMultipart = async (objectName, localFile) => {
-  await db.read()
-  const config = db.data.config
+export const uploadMultipart = async (objectName, localFile, settings) => {
+  const storage = await getObjectStorage(settings)
 
-  if (!config.setting.ObjectStorage.useOSS) {
+  if (!storage.useOSS) {
     return null
   }
 
-  const OSSConfig = config.setting.ObjectStorage.OSS
+  const OSSConfig = { ...storage.OSS }
   delete OSSConfig.url
 
   const client = new OSS(OSSConfig)
@@ -25,7 +24,7 @@ export const uploadMultipart = async (objectName, localFile) => {
 
     return result.name
   } catch (err) {
-    console.log(err)
+    if (!settings) console.log(err)
     return null
   }
 }
@@ -34,15 +33,14 @@ export const uploadMultipart = async (objectName, localFile) => {
  * 解冻文件
  * @param {string} objectName
  */
-export const restoreObject = async (objectName) => {
-  await db.read()
-  const config = db.data.config
+export const restoreObject = async (objectName, settings, statusOnly = false) => {
+  const storage = await getObjectStorage(settings)
 
-  if (!config.setting.ObjectStorage.useOSS) {
+  if (!storage.useOSS) {
     return null
   }
 
-  const OSSConfig = config.setting.ObjectStorage.OSS
+  const OSSConfig = { ...storage.OSS }
   delete OSSConfig.url
 
   const client = new OSS(OSSConfig)
@@ -54,7 +52,7 @@ export const restoreObject = async (objectName) => {
       return -3 // 非归档存储
     }
 
-    if (head.res.headers['x-oss-restore'] && head.res.headers['x-oss-restore'] === 'ongoing-request="true"') {
+    if (head.res.headers['x-oss-restore'] && head.res.headers['x-oss-restore'].includes('ongoing-request="true"')) {
       return 2 // 解冻中
     }
 
@@ -62,6 +60,7 @@ export const restoreObject = async (objectName) => {
       return 3 // 解冻完成
     }
 
+    if (statusOnly) return 0
     const res = await client.restore(objectName)
     if (res.res.status === 202) {
       return 1
@@ -69,7 +68,7 @@ export const restoreObject = async (objectName) => {
 
     return null
   } catch (err) {
-    console.log(err)
+    if (!settings) console.log(err)
     return null
   }
 }
@@ -78,15 +77,14 @@ export const restoreObject = async (objectName) => {
  * 下载文件
  * @param {string} objectName
  */
-export const downloadObject = async (objectName) => {
-  await db.read()
-  const config = db.data.config
+export const downloadObject = async (objectName, settings) => {
+  const storage = await getObjectStorage(settings)
 
-  if (!config.setting.ObjectStorage.useOSS) {
+  if (!storage.useOSS) {
     return null
   }
 
-  const OSSConfig = config.setting.ObjectStorage.OSS
+  const OSSConfig = { ...storage.OSS }
   delete OSSConfig.url
 
   const client = new OSS(OSSConfig)
@@ -101,7 +99,7 @@ export const downloadObject = async (objectName) => {
       outputStream: result.stream
     }
   } catch (err) {
-    console.log(err)
+    if (!settings) console.log(err)
     return {
       status: -2, // 未知错误
       err

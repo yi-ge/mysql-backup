@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,6 +22,9 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run lint
+      - run: npm run typecheck:web
+      - run: npm run build
+      - run: npm run test:browser
 
   backup:
     name: MySQL ${{ matrix.mysql }}
@@ -50,6 +54,7 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npm run build
       - run: npm test
         env:
           MYSQL_TEST_PORT: ${{ job.services.mysql.ports['3306'] }}
@@ -59,27 +64,76 @@ jobs:
     name: Docker build and persistence
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.4.13
+        env:
+          MYSQL_ROOT_PASSWORD: backup-fixture
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysqladmin --protocol=TCP -h127.0.0.1 -uroot -pbackup-fixture ping --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
       - run: docker build --tag mysql-backup:ci .
+      - name: Exercise backup and restore with the image's installed MySQL client
+        env:
+          MYSQL_TEST_PORT: ${{ job.services.mysql.ports['3306'] }}
+          MYSQL_TEST_PASSWORD: backup-fixture
+        run: |
+          docker run --rm --network host --read-only --tmpfs /tmp:rw,nosuid,nodev \
+            -v "$PWD/test:/project/test:ro" -e MYSQL_TEST_PORT -e MYSQL_TEST_PASSWORD \
+            mysql-backup:ci node --test test/workbench.integration.js
       - name: Verify the application and persisted configuration
         run: |
           work_path=$(mktemp -d)
           container=mysql-backup-ci
-          trap 'docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf "$work_path"' EXIT
+          registry=mysql-backup-registry-ci
+          trap 'docker rm -f "$container" "$registry" >/dev/null 2>&1 || true; rm -rf "$work_path"' EXIT
           start_container() {
             docker run --detach --name "$container" \
+              --read-only --tmpfs /tmp:rw,nosuid,nodev \
               --publish 127.0.0.1::80 \
-              --volume "$work_path:/project/db" mysql-backup:ci
+              "$@" mysql-backup:ci
             address=$(docker port "$container" 80/tcp)
             if ! curl --fail --silent --show-error --retry 12 --retry-all-errors \
-              --retry-delay 1 --max-time 2 "http://$address/documentation/json" >/dev/null; then
+              --retry-delay 1 --max-time 2 "http://$address/health" >/dev/null; then
               docker logs "$container"
               return 1
             fi
           }
-          start_container
-          original_key=$(jq -er '.config.sessionKey' "$work_path/mysql-backup-db.json")
+          start_container --volume "$work_path:/project/db"
+          curl -fsS "http://$address/" | grep -q 'id="root"'
+          status() {
+            curl -fsS "http://$address/console/v1" -H 'content-type: application/json' \
+              --data '{"op":"public.status","args":{}}' | jq -e '.ok and .data.setupRequired'
+          }
+          status
+          original_key=$(sudo sha256sum "$work_path/.workbench-key")
+          original_code=$(sudo sha256sum "$work_path/setup-code")
           docker rm --force "$container"
-          start_container
-          test "$original_key" = "$(jq -er '.config.sessionKey' "$work_path/mysql-backup-db.json")"
+          start_container --volume "$work_path:/project/db"
+          status
+          test "$original_key" = "$(sudo sha256sum "$work_path/.workbench-key")"
+          test "$original_code" = "$(sudo sha256sum "$work_path/setup-code")"
+          docker rm --force "$container"
+          start_container --volume "$work_path:/data" -e APP_DATA_DIR=/data \
+            -e DESIRECORE_APP_RUNTIME_PROOF=fixture-proof -e DESIRECORE_APP_RELEASE_DIGEST=fixture-release \
+            -e DESIRECORE_APP_SCOPE_ID=fixture-scope -e DESIRECORE_APP_RUNTIME_GENERATION=fixture-generation
+          curl -fsS "http://$address/health" | jq -e '.role == "console" and (.configured | not)'
+          curl -fsS "http://$address/.app-identity" | jq -e '.proof == "fixture-proof" and .releaseDigest == "fixture-release" and .scopeId == "fixture-scope" and .runtimeGeneration == "fixture-generation"'
+          docker run --detach --name "$registry" --publish 127.0.0.1::5000 registry:3.0.0
+          registry_address=$(docker port "$registry" 5000/tcp)
+          curl -fsS --retry 8 --retry-all-errors --retry-delay 1 "http://$registry_address/v2/" >/dev/null
+          docker tag mysql-backup:ci "$registry_address/mysql-backup:ci"
+          docker push "$registry_address/mysql-backup:ci"
+          image=$(docker image inspect "$registry_address/mysql-backup:ci" | jq -er --arg registry "$registry_address" '.[0].RepoDigests[] | select(startswith($registry + "/mysql-backup@"))')
+          npm run release:desirecore -- --image "$image" --commit "$GITHUB_SHA" --output "$work_path/release"
+          jq -e --arg image "$image" '.delivery.imageRefs == [$image]' "$work_path/release/app-release.json"

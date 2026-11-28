@@ -6,10 +6,15 @@
   "scripts": {
     "dev": "node --watch src/dev.js",
     "start": "node src/main.js",
-    "lint": "eslint src test/backup.integration.js test/dependency-compat.test.js",
+    "lint": "eslint src scripts test/*.integration.js test/dependency-compat.test.js test/workbench-browser.js",
     "lint:fix": "npm run lint -- --fix",
-    "test": "node --test test/backup.integration.js test/dependency-compat.test.js",
-    "postinstall": "patch-package --error-on-fail"
+    "test": "node --test test/backup.integration.js test/dependency-compat.test.js test/workbench.integration.js",
+    "postinstall": "patch-package --error-on-fail",
+    "build": "vite build",
+    "dev:web": "vite",
+    "typecheck:web": "tsc -p web/tsconfig.json",
+    "test:browser": "node test/workbench-browser.js",
+    "release:desirecore": "node scripts/desirecore-release.js"
   },
   "repository": {
     "type": "git",
@@ -32,10 +37,12 @@
     "@fastify/static": "^10.1.12",
     "@fastify/swagger": "^9.9.5",
     "@fastify/swagger-ui": "^6.1.5",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@zip.js/zip.js": "2.25.0",
     "ali-oss": "^6.23.0",
     "axios": "^1.21.1",
     "cos-nodejs-sdk-v5": "^3.0.0",
+    "cron-parser": "5.10.7",
     "dayjs": "^1.11.23",
     "fastify": "^5.12.8",
     "lowdb": "^7.0.1",
@@ -45,12 +52,22 @@
     "patch-package": "8.0.1",
     "pino-pretty": "^13.2.0",
     "qcloudsms_js": "0.1.1",
-    "qiniu": "^7.15.2"
+    "qiniu": "^7.15.2",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/react": "19.3.3",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
     "eslint": "^10.15.0",
-    "globals": "^17.14.0"
+    "globals": "^17.14.0",
+    "lucide-react": "1.83.0",
+    "playwright-core": "1.65.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "7.0.2",
+    "vite": "7.3.8"
   },
   "engines": {
     "node": "^22.13.0 || >=24.0.0",
@@ -61,5 +78,9 @@
       "mysql2": "$mysql2"
     }
   },
-  "packageManager": "npm@11.19.1"
+  "packageManager": "npm@11.19.1",
+  "allowScripts": {
+    "esbuild": true,
+    "fsevents": true
+  }
 }

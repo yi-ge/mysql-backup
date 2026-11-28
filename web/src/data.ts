@@ -29,6 +29,7 @@ export const errors: Record<string, string> = {
   archive_decryption_failed: '无法使用备份时记录的密码解密归档。',
   archive_checksum_mismatch: '归档与原始校验和不匹配。', recovery_target_not_empty: '隔离目标库已有对象，恢复已停止。',
   recovery_target_conflicts_with_source: '恢复目标和源库的库名冲突。', recovery_target_unconfigured: '管理员尚未登记可用的隔离恢复库。',
+  recovery_binlog_policy: '目标实例的二进制日志策略拦截了触发器导入。请检查隔离实例设置。',
   storage_credentials_required: '启用存储前，请填写访问密钥。', download_url_unconfigured: '执行节点尚未配置独立 HTTPS 下载地址。',
   worker_unavailable: '暂时无法连接备份执行节点。', worker_unconfigured: '请在此安装的数据目录配置执行节点地址。', upload_unconfirmed: '存储服务未确认上传。',
   operation_failed: '操作失败，请查看执行节点及运行记录。'

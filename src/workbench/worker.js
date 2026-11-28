@@ -56,17 +56,20 @@ async function importSQL (file, target, command, scratch) {
     '--host=' + target.host, '--port=' + target.port, '--user=' + target.user,
     '--default-character-set=utf8mb4', '--database=' + target.database, ...tls
   ], {
-    stdio: ['pipe', 'ignore', 'ignore'], env: { ...process.env, MYSQL_PWD: target.password ?? '' }
+    stdio: ['pipe', 'ignore', 'pipe'], env: { ...process.env, MYSQL_PWD: target.password ?? '' }
   })
+  let diagnostic = ''
+  child.stderr.setEncoding('utf8')
+  child.stderr.on('data', chunk => { diagnostic = (diagnostic + chunk).slice(-2048) })
   const completion = once(child, 'close').then(([code]) => {
-    if (code !== 0) throw new AppError('restore_import_failed')
-  }).catch(() => { throw new AppError('restore_import_failed') })
+    if (code !== 0) throw new AppError(/(?:^|\n)ERROR 1419\b/.test(diagnostic) ? 'recovery_binlog_policy' : 'restore_import_failed')
+  })
   try {
     await Promise.all([pipeline(createReadStream(file), child.stdin), completion])
-  } catch {
-    child.kill()
-    await completion.catch(() => {})
-    throw new AppError('restore_import_failed')
+  } catch (err) {
+    if (child.exitCode === null) child.kill()
+    const failure = await completion.then(() => err, reason => reason)
+    throw failure instanceof AppError ? failure : new AppError('restore_import_failed')
   }
 }
 

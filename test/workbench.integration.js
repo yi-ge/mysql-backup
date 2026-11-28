@@ -67,6 +67,7 @@ test('migrated workbench runs a scheduled AES backup and a scoped recovery drill
   const targetUser = 'wb_r_' + suffix
   const sourcePassword = 'source-secret-' + suffix
   const targetPassword = 'target-secret-' + suffix
+  const [[logging]] = await db.query('SELECT @@GLOBAL.log_bin AS enabled, @@GLOBAL.log_bin_trust_function_creators AS trusted')
   await db.query('CREATE DATABASE ?? CHARACTER SET utf8mb4; CREATE DATABASE ?? CHARACTER SET utf8mb4', [origin, target])
   await db.query("CREATE USER ?@'%' IDENTIFIED BY ?; CREATE USER ?@'%' IDENTIFIED BY ?", [sourceUser, sourcePassword, targetUser, targetPassword])
   await db.query("GRANT SELECT, SHOW VIEW, TRIGGER ON ??.* TO ?@'%'; GRANT ALL PRIVILEGES ON ??.* TO ?@'%'", [origin, sourceUser, target, targetUser])
@@ -76,8 +77,10 @@ test('migrated workbench runs a scheduled AES backup and a scoped recovery drill
     'CREATE TRIGGER ledger_trigger AFTER INSERT ON ledger FOR EACH ROW INSERT INTO journal VALUES(NEW.id)', [origin]
   )
   t.after(async () => {
-    await db.query("DROP DATABASE IF EXISTS ??; DROP DATABASE IF EXISTS ??; DROP USER IF EXISTS ?@'%'; DROP USER IF EXISTS ?@'%'", [origin, target, sourceUser, targetUser])
-    await db.end()
+    try {
+      if (logging.enabled && !logging.trusted) await db.query('SET GLOBAL log_bin_trust_function_creators=0')
+      await db.query("DROP DATABASE IF EXISTS ??; DROP DATABASE IF EXISTS ??; DROP USER IF EXISTS ?@'%'; DROP USER IF EXISTS ?@'%'", [origin, target, sourceUser, targetUser])
+    } finally { await db.end() }
   })
 
   const oss = archiveServer()
@@ -148,13 +151,25 @@ test('migrated workbench runs a scheduled AES backup and a scoped recovery drill
   assert.equal((await fetch(address + link.url)).status, 200)
   assert.equal((await fetch(address + link.url)).status, 404)
 
+  async function awaitTerminal (runId) {
+    return waitFor(async () => {
+      const run = await api('runs.get', { runId })
+      return ['completed', 'failed'].includes(run.state) && run
+    })
+  }
+
+  if (logging.enabled && !logging.trusted) {
+    const restricted = await api('restore.start', { archiveId, target, requestId: randomUUID() })
+    const failed = await awaitTerminal(restricted.id)
+    assert.equal(failed.reason, 'recovery_binlog_policy')
+    assert.equal(failed.targetMayContainData, true)
+    // Only the isolated fixture changes global policy. The app always uses the scoped account.
+    await db.query('DROP DATABASE ??; CREATE DATABASE ?? CHARACTER SET utf8mb4; SET GLOBAL log_bin_trust_function_creators=1', [target, target])
+  }
   const restore = { archiveId, target, requestId: randomUUID() }
   const recovery = await api('restore.start', restore)
   assert.equal((await api('restore.start', restore)).id, recovery.id)
-  const finished = await waitFor(async () => {
-    const run = await api('runs.get', { runId: recovery.id })
-    return ['completed', 'failed'].includes(run.state) && run
-  })
+  const finished = await awaitTerminal(recovery.id)
   assert.equal(finished.state, 'completed', JSON.stringify(finished))
   assert.equal(finished.matchedOriginalChecksum, true)
   const [[entry]] = await db.query('SELECT label, HEX(bytes) AS bytes FROM ??.ledger WHERE id=1', [target])
@@ -166,10 +181,7 @@ test('migrated workbench runs a scheduled AES backup and a scoped recovery drill
   const [[view]] = await db.query('SELECT label FROM ??.ledger_view', [target])
   assert.equal(view.label, '订单😀')
   const retry = await api('restore.start', { ...restore, requestId: randomUUID() })
-  const refused = await waitFor(async () => {
-    const run = await api('runs.get', { runId: retry.id })
-    return ['completed', 'failed'].includes(run.state) && run
-  })
+  const refused = await awaitTerminal(retry.id)
   assert.equal(refused.reason, 'recovery_target_not_empty')
   assert.equal(refused.state, 'failed')
   const [[unchanged]] = await db.query('SELECT COUNT(*) AS count FROM ??.ledger', [target])

@@ -111,3 +111,13 @@ dist
 
 # Tmp
 /backup-tmp
+
+# Generated workbench UI and local application data
+/dist
+/db/workbench.sqlite*
+/db/.workbench-key
+/db/setup-code
+/db/.operation-*
+
+/dist-desirecore/
+/db/console.json

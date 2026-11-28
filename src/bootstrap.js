@@ -9,7 +9,7 @@ import upload from './lib/object-storage/upload.js'
 import sendSMS from './lib/sms/index.js'
 import dayjs from 'dayjs'
 import { workPath } from './lib/db.js'
-import { backupConnection } from './lib/mysql.js'
+import { backupConnection, backupTriggerOptions } from './lib/mysql.js'
 
 const getObjectStorageType = (value) => {
   switch (value) {
@@ -82,7 +82,8 @@ export default (db, log) => {
                 connection: backupConnection(database.connection),
                 dump: {
                   tables: database.dumpOptions.tables,
-                  excludeTables: database.dumpOptions.excludeTables
+                  excludeTables: database.dumpOptions.excludeTables,
+                  trigger: backupTriggerOptions()
                 },
                 dumpToFile: dumpToFilePath,
                 compressFile: false

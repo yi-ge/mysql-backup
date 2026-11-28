@@ -1,4 +1,7 @@
 .git
+.desirecore
+db/
+test/
 
 # Logs
 logs
